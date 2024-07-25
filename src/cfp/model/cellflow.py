@@ -33,7 +33,7 @@ class CellFlow:
         self.solver = solver
         self.dataloader: CFSampler | None = None
         self.trainer: CellFlowTrainer | None = None
-        self._validation_data: dict[str, PerturbationData] = {}
+        self._validation_data: dict[str, PerturbationData] = {} # TODO: this should be ValidationData, right?
         self._solver: otfm.OTFlowMatching | genot.GENOT | None = None
         self._condition_dim: int | None = None
 
