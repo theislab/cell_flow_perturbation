@@ -337,6 +337,16 @@ class CellFlow:
 
         return predicted_data
 
+    def evaluate(
+        self,
+        adata_true,
+        adata_pred,
+        condition_id_key: str | None = None,
+        sample_rep: str | None = None,
+        metrics: Sequence[str] = ["r_squared"],
+    ) -> dict[str, dict[str, ArrayLike]] | dict[str, ArrayLike]:
+        pass
+
     def get_condition_embedding(
         self,
         adata: ad.AnnData | None = None,
