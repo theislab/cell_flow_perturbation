@@ -7,7 +7,26 @@ import numpy as np
 from numpy.typing import ArrayLike
 
 from cfp.data.data import ValidationData
-from cfp.metrics.metrics import compute_e_distance, compute_r_squared, compute_scalar_mmd, compute_sinkhorn_div
+from cfp.metrics.metrics import (
+    compute_e_distance,
+    compute_r_squared,
+    compute_scalar_mmd,
+    compute_sinkhorn_div,
+)
+from cfp._logging import logger
+
+try:
+    import wandb
+except ImportError:
+    logger.warning(
+        "wandb is not installed, please install it via `pip install wandb` to use the `WandbLogger` callback"
+    )
+try:
+    import omegaconf
+except ImportError:
+    logger.warning(
+        "omegaconf is not installed, please install it via `pip install omegaconf` to use the `WandbLogger` callback"
+    )
 
 
 class BaseCallback(abc.ABC):
@@ -202,19 +221,6 @@ class WandbLogger(LoggingCallback):
         None
     """
 
-    try:
-        import wandb
-    except ImportError:
-        raise ImportError(
-            "wandb is not installed, please install it via `pip install wandb`"
-        ) from None
-    try:
-        import omegaconf
-    except ImportError:
-        raise ImportError(
-            "omegaconf is not installed, please install it via `pip install omegaconf`"
-        ) from None
-
     def __init__(
         self,
         project: str,
@@ -222,6 +228,7 @@ class WandbLogger(LoggingCallback):
         config: omegaconf.OmegaConf | dict[str, Any],
         **kwargs,
     ):
+
         self.project = project
         self.out_dir = out_dir
         self.config = config
@@ -241,11 +248,7 @@ class WandbLogger(LoggingCallback):
             ),
         )
 
-    def on_log_iteration(
-        self,
-        dict_to_log: dict[str, float],
-        **_: Any,
-    ) -> Any:
+    def on_log_iteration(self, dict_to_log: dict[str, float]) -> Any:
         """Called at each validation/log iteration to log data to WandB"""
         wandb.log(dict_to_log)  # noqa: F821
 
@@ -269,7 +272,7 @@ class CallbackRunner:
 
     def __init__(
         self,
-        callbacks: list[ComputationCallback],
+        callbacks: list[ComputationCallback | LoggingCallback],
     ) -> None:
 
         self.computation_callbacks = [
