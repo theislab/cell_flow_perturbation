@@ -1,0 +1,13 @@
+# @package _global_
+
+defaults:
+  - override /hydra/launcher: submitit_slurm
+
+hydra:
+  launcher:
+    partition: cpu_p
+    qos: cpu_normal
+    cpus_per_task: 6
+    mem_gb: 100
+    timeout_min: 1440
+    array_parallelism: 15 # max num of tasks to run in parallel (via job array)

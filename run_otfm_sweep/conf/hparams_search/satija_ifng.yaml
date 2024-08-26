@@ -1,0 +1,40 @@
+# @package _global_
+
+defaults:
+  - override /hydra/sweeper/sampler: random
+  - override /hydra/sweeper: optuna
+
+optimized_metric: ood_sinkhorn_div_1
+
+hydra:
+  sweeper:
+    #_target_: hydra_plugins.hydra_optuna_sweeper.optuna_sweeper.OptunaSweeper
+
+    direction: minimize
+
+    n_jobs: 1000
+
+    n_trials: 1000
+
+    sampler:
+      _target_: optuna.samplers.RandomSampler
+
+    # define hyperparameter search space
+    params:
+      # dataset.pca_dims: choice(30, 300)
+      # dataset.sample_covariates: choice([cell_line], [])
+      model.condition_embedding_dim: choice(64, 256, 1024)
+      model.time_encoder_dims: choice([1024, 1024, 1024], [2048, 2048, 2048])
+      model.time_encoder_dropout: choice(0.0, 0.1, 0.2, 0.5)
+      model.hidden_dims: choice([2048, 2048, 2048], [4096, 4096, 4096])
+      model.decoder_dropout: choice(0.0, 0.1, 0.2)
+      model.layers_after_pool.layer_type: choice(mlp, self_attention)
+      model.layers_after_pool.dims: choice([512, 512], [1024, 1024], [2048, 2048])
+      model.cond_output_dropout: choice(0.0, 0.2, 0.5, 0.9)
+      training.multi_steps: choice(20, 50)
+      training.batch_size: choice(128, 512, 1024)
+      model.flow.constant_noise: choice(1.0, 0.9)
+      model.match_kwargs.epsilon: choice(0.01, 0.1)
+      model.match_kwargs.tau_a: choice(1.0, 0.9)
+      model.match_kwargs.tau_b: choice(0.999, 0.99)
+      

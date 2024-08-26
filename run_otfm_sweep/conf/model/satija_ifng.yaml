@@ -1,0 +1,17 @@
+hidden_dims: [1024, 1024, 1024]
+decoder_dims: [2048, 2048, 2048]
+condition_embedding_dim: 4096
+time_encoder_dims: [512, 512, 512]
+time_encoder_dropout: 0.2
+cond_output_dropout: 0.5
+flow:
+  constant_noise: 1.0
+hidden_dropout: 0.0
+decoder_dropout: 0.0
+layers_after_pool: 
+    layer_type: "mlp"
+    dims: [4096, 4096]
+match_kwargs: 
+  epsilon: 0.01
+  tau_a: 1.0
+  tau_b: 0.999

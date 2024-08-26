@@ -1,0 +1,4 @@
+run:
+  dir: /lustre/groups/ml01/workspace/ot_pert_satija/output_ifng/${now:%Y-%m-%d}_${now:%H-%M-%S}
+sweep:
+  dir: /lustre/groups/ml01/workspace/ot_pert_satija/output_ifng/${now:%Y-%m-%d}_${now:%H-%M-%S}

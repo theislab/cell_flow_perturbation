@@ -1,0 +1,2 @@
+dataset_path: /lustre/groups/ml01/workspace/ot_perturbation/data/satija/datasets/ood_cell_type/IFNG_ct-BXPC3_hvg-2000_pca-30_norm
+file_suffix: '_IFNG_BXPC3_embs'

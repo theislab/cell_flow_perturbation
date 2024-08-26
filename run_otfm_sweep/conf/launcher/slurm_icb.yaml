@@ -1,0 +1,14 @@
+# @package _global_
+
+defaults:
+  - override /hydra/launcher: submitit_slurm
+
+hydra:
+  launcher:
+    partition: gpu_p
+    qos: gpu_normal
+    #cpus_per_task: 6
+    mem_gb: 160
+    gres: gpu:1
+    timeout_min: 1440
+    array_parallelism: 8
