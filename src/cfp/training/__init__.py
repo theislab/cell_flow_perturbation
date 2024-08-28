@@ -5,7 +5,6 @@ from cfp.training._callbacks import (
                                      LoggingCallback,
                                      Metrics,
                                      PCADecodedMetrics,
-                                     PCADecoder,
                                      WandbLogger,
 )
 from cfp.training._trainer import CellFlowTrainer

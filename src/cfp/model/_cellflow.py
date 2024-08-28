@@ -16,11 +16,13 @@ from numpy.typing import ArrayLike
 from ott.neural.methods.flows import dynamics
 from ott.solvers import utils as solver_utils
 
+from cfp import _constants
 from cfp._types import Layers_separate_input_t, Layers_t
 from cfp.data._data import BaseDataMixin, ValidationData
 from cfp.data._dataloader import PredictionSampler, TrainSampler, ValidationSampler
 from cfp.data._datamanager import DataManager
 from cfp.networks._velocity_field import ConditionalVelocityField
+from cfp.plotting import _utils
 from cfp.solvers import _genot, _otfm
 from cfp.training._callbacks import BaseCallback
 from cfp.training._trainer import CellFlowTrainer
@@ -410,7 +412,8 @@ class CellFlow:
         covariate_data: pd.DataFrame | BaseDataMixin | None = None,
         rep_dict: dict[str, str] | None = None,
         condition_id_key: str | None = None,
-    ) -> dict[str, ArrayLike]:
+        key_added: str | None = _constants.CONDITION_EMBEDDING,
+    ) -> pd.DataFrame:
         """Get condition embedding.
 
         Parameters
@@ -421,10 +424,12 @@ class CellFlow:
                 Covariate data.
             condition_id_key
                 Key in :attr:`anndata.AnnData.obs` or `covariate_data` indicating the condition name.
+            key_added
+                Key to store the condition embedding in :attr:`anndata.AnnData.uns`.
 
         Returns
         -------
-            A class:`dict` with the condition embedding for each condition.
+            A :class:`~pandas.DataFrame` with the condition embeddings.
         """
         if self.solver is None:
             raise ValueError("Model not trained. Please call `train` first.")
@@ -458,7 +463,21 @@ class CellFlow:
                 c_key = tuple(cov_combination[i] for i in range(len(cov_combination)))
             condition_embeddings[c_key] = self.solver.get_condition_embedding(condition)
 
-        return condition_embeddings
+        df = pd.DataFrame.from_dict(
+            {k: v[0] for k, v in condition_embeddings.items()}  # type: ignore[index]
+        ).T
+        indices = list(self.dm.sample_covariates)
+        for pert_cov in self.dm.perturbation_covariates:
+            indices += [
+                f"{pert_cov}_{i}" for i in range(self.dm.max_combination_length)
+            ]
+        df.index.set_names(indices, inplace=True)
+        df.drop_duplicates(inplace=True)
+
+        if key_added is not None:
+            _utils.set_plotting_vars(self.adata, key=key_added, value=df)
+
+        return df
 
     def save(
         self,

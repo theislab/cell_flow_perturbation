@@ -6,13 +6,11 @@ import pytest
 class TestCallbacks:
     @pytest.mark.parametrize("metrics", [["r_squared"]])
     def test_pca_reconstruction(self, adata_pca: ad.AnnData, metrics):
-        from cfp.training import PCADecodedMetrics, PCADecoder
+        from cfp.training import PCADecodedMetrics
 
         decoded_metrics_callback = PCADecodedMetrics(
             metrics=metrics,
-            pca_decoder=PCADecoder(
-                pcs=adata_pca.varm["PCs"], means=adata_pca.varm["X_mean"]
-            ),
+            ref_adata=adata_pca,
         )
 
         reconstruction = decoded_metrics_callback.reconstruct_data(

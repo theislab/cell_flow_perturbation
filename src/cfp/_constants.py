@@ -1,5 +1,4 @@
-UNS_KEY_CONDITIONS = "cell_flow_conditions"
 CONTROL_HELPER = "_cfp_control"
-COVARIATE_EMBEDDING = "covariate_embedding"
+CONDITION_EMBEDDING = "condition_embedding"
 CFP_KEY = "cell_flow_perturbation"
 GENOT_CELL_KEY = "cell_embedding_condition"

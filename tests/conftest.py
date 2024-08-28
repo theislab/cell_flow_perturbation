@@ -205,3 +205,31 @@ def adata_pca() -> ad.AnnData:
     sc.pp.pca(adata, zero_center=False, n_comps=n_pca)
 
     return adata
+
+
+@pytest.fixture()
+def adata_with_compounds() -> ad.AnnData:
+
+    n_obs = 10
+    n_vars = 50
+    compound_names = np.array(["AZD1390", "Dabrafenib Mesylate", "GW0742"])
+    compound_cids = np.array([126689157, 44516822, 9934458])
+    compound_smiles = np.array(
+        [
+            "CC(C)N1C2=C(C=NC3=CC(=C(C=C32)C4=CN=C(C=C4)OCCCN5CCCCC5)F)N(C1=O)C",
+            "CC(C)(C)C1=NC(=C(S1)C2=NC(=NC=C2)N)C3=C(C(=CC=C3)NS(=O)(=O)C4=C(C=CC=C4F)F)F.CS(=O)(=O)O",
+            "CC1=C(C=CC(=C1)SCC2=C(N=C(S2)C3=CC(=C(C=C3)C(F)(F)F)F)C)OCC(=O)O",
+        ]
+    )
+    compound_idcs = np.random.choice(len(compound_names), n_obs)
+
+    X_data = np.random.rand(n_obs, n_vars)
+    adata = ad.AnnData(X=X_data)
+    adata.obs["compound_name"] = compound_names[compound_idcs]
+    adata.obs["compound_cid"] = compound_cids[compound_idcs]
+    adata.obs["compound_smiles"] = compound_smiles[compound_idcs]
+    adata.obs["compound2_name"] = compound_names[compound_idcs]
+    adata.obs["compound2_cid"] = compound_cids[compound_idcs]
+    adata.obs["compound2_smiles"] = compound_smiles[compound_idcs]
+
+    return adata
