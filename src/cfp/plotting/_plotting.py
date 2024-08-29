@@ -175,3 +175,12 @@ def plot_condition_embedding(
     ax.yaxis.set_tick_params(labelsize=fontsize)
 
     return fig if return_fig else None
+
+
+def plot_expressions():
+    """Plot kernel density estimations of expressions.
+
+    This function is adapted from https://github.com/leotac/joypy/blob/master/joypy/joyplot.py
+
+
+    """
