@@ -218,7 +218,6 @@ def _joyplot(
     loc="upper right",
     colormap: str | mpl.colors.Colormap | None = None,
     color=None,
-    normalize: bool = True,
     **kwargs,
 ) -> tuple[plt.Figure, list[plt.Axes]]:
     if fill is True and linecolor is None:
@@ -338,7 +337,6 @@ def _joyplot(
                     label=sublabel,
                     zorder=element_zorder,
                     color=element_color,
-                    normalize=normalize,
                     bins=bins,
                     density_fit=density_fit,
                     **kwargs,
@@ -440,6 +438,7 @@ def _plot_density(
     linecolor: Any = None,
     density_fit: Literal["log1p", "raw"] = "raw",
     clip_on: bool = True,
+    bins: int = 10,
     **kwargs,
 ) -> plt.Axes:
     v = _remove_na(v)

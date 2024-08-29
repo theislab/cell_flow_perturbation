@@ -187,7 +187,7 @@ def plot_condition_embedding(
 
 def plot_densities(
     data: pd.DataFrame,
-    features: Sequence[str],
+    feature: str,
     group_by: str | None = None,
     density_fit: Literal["log1p", "raw"] = "raw",
     ax: mpl.axes.Axes | None = None,
@@ -213,7 +213,6 @@ def plot_densities(
     title: str | None = None,
     colormap: str | mpl.colors.Colormap | None = None,
     color: Any = None,
-    normalize: bool = True,
     grid: bool = False,
     return_fig: bool = True,
     **kwargs,
@@ -226,8 +225,8 @@ def plot_densities(
     ----------
     data
         :class:`pandas.DataFrame` object containing (predicted) expression values.
-    features
-        Features whose density to plot.
+    feature
+        Column in ``'data'`` to plot.
     group_by
         Column in ``'data'`` to group by.
     density_fit
@@ -285,8 +284,6 @@ def plot_densities(
         Colormap to use.
     color: :mpltype:`color`
         Color of the density plots.
-    normalize
-        Whether to normalize the densities.
     grid
         Whether to show the grid.
     return_fig
@@ -300,15 +297,15 @@ def plot_densities(
     """
     if group_by is not None and isinstance(data, pd.DataFrame):
         grouped = data.groupby(group_by)
-        if features is None:
-            features = list(data.columns)
-            features.remove(group_by)
-        converted, _labels, sublabels = _grouped_df_to_standard(grouped, features)  # type: ignore[arg-type]
+        if feature is None:
+            feature = list(data.columns)
+            feature.remove(group_by)
+        converted, _labels, sublabels = _grouped_df_to_standard(grouped, feature)  # type: ignore[arg-type]
         if labels is None:
             labels = _labels
     elif isinstance(data, pd.DataFrame):
-        if features is not None:
-            data = data[features]
+        if feature is not None:
+            data = data[feature]
         converted = [
             [_remove_na(data[col])] for col in data.columns if _is_numeric(data[col])
         ]
@@ -354,7 +351,6 @@ def plot_densities(
         title=title,
         colormap=colormap,
         color=color,
-        normalize=normalize,
         density_fit=density_fit,
         **kwargs,
     )

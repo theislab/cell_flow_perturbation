@@ -29,11 +29,9 @@ class TestPlotConditionEmbedding:
 
 
 class TestJoyPlot:
-    @pytest.mark.parametrize("features", [["x", "y"], "x"])
+    @pytest.mark.parametrize("features", [["x"]])
     @pytest.mark.parametrize("group_by", ["dosage", None])
     @pytest.mark.parametrize("hist", [True, False])
     def test_plot_joyplot(self, df_joyplot, features, group_by, hist):
-        fig = plot_densities(
-            df_joyplot, features=features, group_by=group_by, hist=hist
-        )
+        fig = plot_densities(df_joyplot, feature=features, group_by=group_by, hist=hist)
         assert isinstance(fig, plt.Figure)
