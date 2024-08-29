@@ -4,9 +4,6 @@ out_dir: '/lustre/groups/ml01/workspace/ot_perturbation/data/satija/out'
 metrics: ['r_squared', "mmd", "sinkhorn_div", "e_distance"]
 calc_decoded_metrics: True
 decoded_metrics: ['r_squared', "mmd", "sinkhorn_div", "e_distance"]
-pcs: 'PCs'
-means: 'X_train_mean'
 
 save_model: True
-save_model_path: /home/icb/lea.zimmermann/projects/cell_flow_perturbation/results
-save_model_prefix: 'satija_ifng_otfm_test'
+save_model_path: /lustre/groups/ml01/workspace/ot_pert_satija/output_ifng/${now:%Y-%m-%d}_${now:%H-%M-%S}

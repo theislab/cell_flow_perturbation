@@ -1,0 +1,7 @@
+------------------ Data loaded ------------------
+[2024-08-29 10:55:52,518][jax._src.xla_bridge][INFO] - Unable to initialize backend 'rocm': module 'jaxlib.xla_extension' has no attribute 'GpuAllocatorConfig'
+[2024-08-29 10:55:52,722][jax._src.xla_bridge][INFO] - Unable to initialize backend 'tpu': INTERNAL: Failed to open libtpu.so: libtpu.so: cannot open shared object file: No such file or directory
+------------------ Model prepared ------------------
+------------------ Callbacks prepared ------------------
+------------------ Training done ------------------
+------------------ Model saved ------------------

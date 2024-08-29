@@ -11,4 +11,4 @@ hydra:
     mem_gb: 80
     gres: gpu:1
     timeout_min: 1440
-    array_parallelism: 8
+    array_parallelism: 5

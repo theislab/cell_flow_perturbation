@@ -6,7 +6,7 @@ import optax
 import hydra 
 from omegaconf import DictConfig, OmegaConf
 from functools import partial
-from cfp.training import Metrics, PCADecoder, PCADecodedMetrics
+from cfp.training import Metrics, PCADecodedMetrics
 from cfp.training._callbacks import WandbLogger
 from ott.solvers import utils as solver_utils
 
@@ -86,10 +86,9 @@ def run(cfg: DictConfig):
     callbacks.append(metrics_callback)
 
     if cfg.logger.calc_decoded_metrics:
-        pca_decoder = PCADecoder(pcs=adata_train.varm[cfg.logger.pcs], means=adata_train.varm[cfg.logger.means])
         decoded_metrics_callback = PCADecodedMetrics(
-            metrics=cfg.logger.decoded_metrics,
-            pca_decoder=pca_decoder
+            ref_adata=adata_train,
+            metrics=cfg.logger.decoded_metrics
         )
         callbacks.append(decoded_metrics_callback)
 
@@ -107,10 +106,10 @@ def run(cfg: DictConfig):
     print("------------------ Training done ------------------")
 
     if cfg.logger.save_model:
-        cf.save(dir_path=cfg.logger.save_model_path, file_prefix=cfg.logger.save_model_prefix)
+        cf.save(dir_path=cfg.logger.save_model_path, file_prefix=cfg.logger.project)
         print("------------------ Model saved ------------------")
 
-    return 1.
+    return 1.0
 
 if __name__ == "__main__":
     try:

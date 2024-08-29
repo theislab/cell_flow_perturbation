@@ -1,0 +1,109 @@
+/home/icb/lea.zimmermann/projects/cell_flow_perturbation/run_otfm_sweep/train_satija_ifng.py:13: UserWarning: 
+The version_base parameter is not specified.
+Please specify a compatability version level, or None.
+Will assume defaults for version 1.1
+  @hydra.main(config_path="conf", config_name="train_ifng")
+/lustre/groups/ml01/workspace/lea.zimmermann/software/miniconda3/envs/ot/lib/python3.10/site-packages/hydra/_internal/hydra.py:119: UserWarning: Future Hydra versions will no longer change working directory at job runtime by default.
+See https://hydra.cc/docs/1.2/upgrades/1.1_to_1.2/changes_to_job_working_dir/ for more information.
+  ret = run_job(
+/ictstr01/home/icb/lea.zimmermann/projects/cell_flow_perturbation/src/cfp/data/_datamanager.py:319: SettingWithCopyWarning: 
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  _covariate_data["cell_index"] = _covariate_data.index
+  0%|          | 0/218 [00:00<?, ?it/s]  0%|          | 1/218 [00:00<02:11,  1.65it/s]  6%|▌         | 12/218 [00:00<00:09, 22.28it/s] 11%|█         | 24/218 [00:00<00:04, 42.67it/s] 16%|█▌        | 35/218 [00:00<00:03, 57.85it/s] 22%|██▏       | 47/218 [00:01<00:02, 72.65it/s] 28%|██▊       | 61/218 [00:01<00:01, 90.02it/s] 34%|███▍      | 74/218 [00:01<00:01, 100.04it/s] 39%|███▉      | 86/218 [00:01<00:01, 104.59it/s] 46%|████▌     | 100/218 [00:01<00:01, 110.91it/s] 52%|█████▏    | 114/218 [00:01<00:00, 118.88it/s] 59%|█████▊    | 128/218 [00:01<00:00, 123.55it/s] 65%|██████▍   | 141/218 [00:01<00:00, 124.75it/s] 71%|███████   | 155/218 [00:01<00:00, 127.23it/s] 78%|███████▊  | 170/218 [00:01<00:00, 132.73it/s] 84%|████████▍ | 184/218 [00:02<00:00, 132.90it/s] 91%|█████████ | 198/218 [00:02<00:00, 132.70it/s] 97%|█████████▋| 212/218 [00:02<00:00, 132.09it/s]100%|██████████| 218/218 [00:02<00:00, 94.14it/s] 
+  0%|          | 0/218 [00:00<?, ?it/s]  6%|▋         | 14/218 [00:00<00:01, 133.36it/s] 13%|█▎        | 29/218 [00:00<00:01, 141.38it/s] 20%|██        | 44/218 [00:00<00:01, 137.02it/s] 27%|██▋       | 58/218 [00:00<00:01, 123.08it/s] 33%|███▎      | 71/218 [00:00<00:01, 118.98it/s] 39%|███▊      | 84/218 [00:00<00:01, 118.41it/s] 45%|████▍     | 98/218 [00:00<00:00, 122.61it/s] 51%|█████▏    | 112/218 [00:00<00:00, 125.84it/s] 58%|█████▊    | 126/218 [00:00<00:00, 128.39it/s] 64%|██████▍   | 140/218 [00:01<00:00, 128.59it/s] 71%|███████   | 154/218 [00:01<00:00, 129.21it/s] 78%|███████▊  | 169/218 [00:01<00:00, 133.73it/s] 84%|████████▍ | 183/218 [00:01<00:00, 133.72it/s] 90%|█████████ | 197/218 [00:01<00:00, 134.30it/s] 97%|█████████▋| 211/218 [00:01<00:00, 132.04it/s]100%|██████████| 218/218 [00:01<00:00, 129.36it/s]
+  0%|          | 0/218 [00:00<?, ?it/s]  6%|▋         | 14/218 [00:00<00:01, 133.46it/s] 13%|█▎        | 29/218 [00:00<00:01, 141.23it/s] 20%|██        | 44/218 [00:00<00:01, 137.69it/s] 27%|██▋       | 58/218 [00:00<00:01, 132.81it/s] 33%|███▎      | 72/218 [00:00<00:01, 133.68it/s] 39%|███▉      | 86/218 [00:00<00:01, 125.56it/s] 45%|████▌     | 99/218 [00:00<00:00, 120.76it/s] 51%|█████▏    | 112/218 [00:00<00:00, 117.43it/s] 57%|█████▋    | 124/218 [00:01<00:00, 115.42it/s] 63%|██████▎   | 137/218 [00:01<00:00, 119.27it/s] 69%|██████▉   | 151/218 [00:01<00:00, 122.33it/s] 76%|███████▌  | 166/218 [00:01<00:00, 127.84it/s] 83%|████████▎ | 180/218 [00:01<00:00, 131.21it/s] 89%|████████▉ | 194/218 [00:01<00:00, 132.15it/s] 95%|█████████▌| 208/218 [00:01<00:00, 130.61it/s]100%|██████████| 218/218 [00:01<00:00, 127.68it/s]
+  0%|          | 0/218 [00:00<?, ?it/s]  6%|▋         | 14/218 [00:00<00:01, 133.44it/s] 13%|█▎        | 29/218 [00:00<00:01, 141.41it/s] 20%|██        | 44/218 [00:00<00:01, 138.20it/s] 27%|██▋       | 58/218 [00:00<00:01, 133.95it/s] 33%|███▎      | 72/218 [00:00<00:01, 133.81it/s] 39%|███▉      | 86/218 [00:00<00:00, 132.21it/s] 46%|████▌     | 100/218 [00:00<00:00, 130.20it/s] 52%|█████▏    | 114/218 [00:00<00:00, 132.11it/s] 59%|█████▊    | 128/218 [00:00<00:00, 132.90it/s] 65%|██████▌   | 142/218 [00:01<00:00, 122.85it/s] 71%|███████   | 155/218 [00:01<00:00, 119.05it/s] 77%|███████▋  | 168/218 [00:01<00:00, 119.28it/s] 83%|████████▎ | 182/218 [00:01<00:00, 123.68it/s] 90%|████████▉ | 196/218 [00:01<00:00, 127.61it/s] 96%|█████████▌| 209/218 [00:01<00:00, 126.54it/s]100%|██████████| 218/218 [00:01<00:00, 128.57it/s]
+  0%|          | 0/218 [00:00<?, ?it/s]  6%|▋         | 14/218 [00:00<00:01, 134.03it/s] 13%|█▎        | 29/218 [00:00<00:01, 142.02it/s] 20%|██        | 44/218 [00:00<00:01, 138.17it/s] 27%|██▋       | 58/218 [00:00<00:01, 133.00it/s] 33%|███▎      | 72/218 [00:00<00:01, 133.93it/s] 39%|███▉      | 86/218 [00:00<00:00, 132.66it/s] 46%|████▌     | 100/218 [00:00<00:00, 131.26it/s] 52%|█████▏    | 114/218 [00:00<00:00, 133.46it/s] 59%|█████▊    | 128/218 [00:00<00:00, 134.40it/s] 65%|██████▌   | 142/218 [00:01<00:00, 132.83it/s] 72%|███████▏  | 156/218 [00:01<00:00, 132.00it/s] 78%|███████▊  | 171/218 [00:01<00:00, 134.69it/s] 85%|████████▍ | 185/218 [00:01<00:00, 127.61it/s] 91%|█████████ | 198/218 [00:01<00:00, 121.95it/s] 97%|█████████▋| 211/218 [00:01<00:00, 117.85it/s]100%|██████████| 218/218 [00:01<00:00, 128.33it/s]
+/ictstr01/home/icb/lea.zimmermann/projects/cell_flow_perturbation/src/cfp/data/_datamanager.py:319: SettingWithCopyWarning: 
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  _covariate_data["cell_index"] = _covariate_data.index
+  0%|          | 0/219 [00:00<?, ?it/s] 15%|█▌        | 33/219 [00:00<00:00, 323.98it/s] 38%|███▊      | 84/219 [00:00<00:00, 428.42it/s] 65%|██████▌   | 143/219 [00:00<00:00, 499.99it/s] 92%|█████████▏| 202/219 [00:00<00:00, 534.06it/s]100%|██████████| 219/219 [00:00<00:00, 504.82it/s]
+  0%|          | 0/219 [00:00<?, ?it/s] 27%|██▋       | 59/219 [00:00<00:00, 585.60it/s] 54%|█████▍    | 118/219 [00:00<00:00, 584.99it/s] 81%|████████  | 177/219 [00:00<00:00, 586.16it/s]100%|██████████| 219/219 [00:00<00:00, 586.12it/s]
+  0%|          | 0/219 [00:00<?, ?it/s] 24%|██▍       | 53/219 [00:00<00:00, 520.70it/s] 48%|████▊     | 106/219 [00:00<00:00, 464.46it/s] 75%|███████▌  | 165/219 [00:00<00:00, 517.44it/s]100%|██████████| 219/219 [00:00<00:00, 523.12it/s]
+  0%|          | 0/219 [00:00<?, ?it/s] 27%|██▋       | 59/219 [00:00<00:00, 583.84it/s] 54%|█████▍    | 118/219 [00:00<00:00, 444.40it/s] 78%|███████▊  | 171/219 [00:00<00:00, 475.28it/s]100%|██████████| 219/219 [00:00<00:00, 499.29it/s]
+  0%|          | 0/219 [00:00<?, ?it/s] 27%|██▋       | 59/219 [00:00<00:00, 586.14it/s] 54%|█████▍    | 118/219 [00:00<00:00, 587.59it/s] 81%|████████  | 177/219 [00:00<00:00, 482.11it/s]100%|██████████| 219/219 [00:00<00:00, 508.85it/s]
+  0%|          | 0/219 [00:00<?, ?it/s] 27%|██▋       | 59/219 [00:00<00:00, 584.58it/s] 54%|█████▍    | 118/219 [00:00<00:00, 585.91it/s] 81%|████████  | 177/219 [00:00<00:00, 538.90it/s]100%|██████████| 219/219 [00:00<00:00, 499.24it/s]
+/ictstr01/home/icb/lea.zimmermann/projects/cell_flow_perturbation/src/cfp/data/_datamanager.py:319: SettingWithCopyWarning: 
+A value is trying to be set on a copy of a slice from a DataFrame.
+Try using .loc[row_indexer,col_indexer] = value instead
+
+See the caveats in the documentation: https://pandas.pydata.org/pandas-docs/stable/user_guide/indexing.html#returning-a-view-versus-a-copy
+  _covariate_data["cell_index"] = _covariate_data.index
+  0%|          | 0/58 [00:00<?, ?it/s] 31%|███       | 18/58 [00:00<00:00, 174.19it/s] 64%|██████▍   | 37/58 [00:00<00:00, 181.43it/s] 98%|█████████▊| 57/58 [00:00<00:00, 186.82it/s]100%|██████████| 58/58 [00:00<00:00, 185.54it/s]
+  0%|          | 0/58 [00:00<?, ?it/s] 43%|████▎     | 25/58 [00:00<00:00, 244.15it/s] 86%|████████▌ | 50/58 [00:00<00:00, 239.43it/s]100%|██████████| 58/58 [00:00<00:00, 244.50it/s]
+  0%|          | 0/58 [00:00<?, ?it/s] 43%|████▎     | 25/58 [00:00<00:00, 246.09it/s] 86%|████████▌ | 50/58 [00:00<00:00, 239.97it/s]100%|██████████| 58/58 [00:00<00:00, 245.11it/s]
+  0%|          | 0/58 [00:00<?, ?it/s] 43%|████▎     | 25/58 [00:00<00:00, 247.12it/s] 86%|████████▌ | 50/58 [00:00<00:00, 240.09it/s]100%|██████████| 58/58 [00:00<00:00, 245.36it/s]
+  0%|          | 0/58 [00:00<?, ?it/s] 43%|████▎     | 25/58 [00:00<00:00, 246.77it/s] 86%|████████▌ | 50/58 [00:00<00:00, 240.58it/s]100%|██████████| 58/58 [00:00<00:00, 245.75it/s]
+  0%|          | 0/58 [00:00<?, ?it/s] 43%|████▎     | 25/58 [00:00<00:00, 242.19it/s] 86%|████████▌ | 50/58 [00:00<00:00, 238.30it/s]100%|██████████| 58/58 [00:00<00:00, 243.38it/s]
+wandb: Currently logged in as: lea-zimmermann (modality_translation). Use `wandb login --relogin` to force relogin
+wandb: Tracking run with wandb version 0.17.8
+wandb: Run data is saved locally in /lustre/groups/ml01/workspace/ot_perturbation/data/satija/out/wandb/run-20240829_105709-yqemywln
+wandb: Run `wandb offline` to turn off syncing.
+wandb: Syncing run super-voice-8
+wandb: ⭐️ View project at https://wandb.ai/modality_translation/satija_ifng_otfm
+wandb: 🚀 View run at https://wandb.ai/modality_translation/satija_ifng_otfm/runs/yqemywln
+  0%|          | 0/10 [00:00<?, ?it/s] 10%|█         | 1/10 [00:08<01:14,  8.25s/it] 20%|██        | 2/10 [00:08<00:28,  3.53s/it] 30%|███       | 3/10 [00:08<00:14,  2.02s/it] 40%|████      | 4/10 [00:08<00:07,  1.31s/it] 50%|█████     | 5/10 [00:09<00:04,  1.09it/s] 60%|██████    | 6/10 [00:09<00:02,  1.47it/s]/lustre/groups/ml01/workspace/lea.zimmermann/software/miniconda3/envs/ot/lib/python3.10/site-packages/jax/_src/core.py:691: FutureWarning: unhashable type: <class 'jax._src.interpreters.partial_eval.DynamicJaxprTracer'>. Attempting to hash a tracer will lead to an error in a future JAX release.
+  warnings.warn(
+/lustre/groups/ml01/workspace/lea.zimmermann/software/miniconda3/envs/ot/lib/python3.10/site-packages/jax/_src/core.py:691: FutureWarning: unhashable type: <class 'jax._src.interpreters.partial_eval.DynamicJaxprTracer'>. Attempting to hash a tracer will lead to an error in a future JAX release.
+  warnings.warn(
+/lustre/groups/ml01/workspace/lea.zimmermann/software/miniconda3/envs/ot/lib/python3.10/site-packages/jax/_src/core.py:691: FutureWarning: unhashable type: <class 'jax._src.interpreters.partial_eval.DynamicJaxprTracer'>. Attempting to hash a tracer will lead to an error in a future JAX release.
+  warnings.warn(
+/lustre/groups/ml01/workspace/lea.zimmermann/software/miniconda3/envs/ot/lib/python3.10/site-packages/jax/_src/core.py:691: FutureWarning: unhashable type: <class 'jax._src.interpreters.partial_eval.DynamicJaxprTracer'>. Attempting to hash a tracer will lead to an error in a future JAX release.
+  warnings.warn(
+ 60%|██████    | 6/10 [01:08<00:02,  1.47it/s, loss=0.516] 70%|███████   | 7/10 [01:08<00:59, 19.77s/it, loss=0.516] 80%|████████  | 8/10 [01:08<00:27, 13.55s/it, loss=0.516] 90%|█████████ | 9/10 [01:08<00:09,  9.38s/it, loss=0.516]100%|██████████| 10/10 [01:09<00:00,  6.55s/it, loss=0.516]100%|██████████| 10/10 [01:09<00:00,  6.91s/it, loss=0.516]
+/lustre/groups/ml01/workspace/lea.zimmermann/software/miniconda3/envs/ot/lib/python3.10/site-packages/jax/_src/core.py:691: FutureWarning: unhashable type: <class 'jax._src.interpreters.partial_eval.DynamicJaxprTracer'>. Attempting to hash a tracer will lead to an error in a future JAX release.
+  warnings.warn(
+/lustre/groups/ml01/workspace/lea.zimmermann/software/miniconda3/envs/ot/lib/python3.10/site-packages/jax/_src/core.py:691: FutureWarning: unhashable type: <class 'jax._src.interpreters.partial_eval.DynamicJaxprTracer'>. Attempting to hash a tracer will lead to an error in a future JAX release.
+  warnings.warn(
+/lustre/groups/ml01/workspace/lea.zimmermann/software/miniconda3/envs/ot/lib/python3.10/site-packages/jax/_src/core.py:691: FutureWarning: unhashable type: <class 'jax._src.interpreters.partial_eval.DynamicJaxprTracer'>. Attempting to hash a tracer will lead to an error in a future JAX release.
+  warnings.warn(
+/lustre/groups/ml01/workspace/lea.zimmermann/software/miniconda3/envs/ot/lib/python3.10/site-packages/jax/_src/core.py:691: FutureWarning: unhashable type: <class 'jax._src.interpreters.partial_eval.DynamicJaxprTracer'>. Attempting to hash a tracer will lead to an error in a future JAX release.
+  warnings.warn(
+wandb: - 0.012 MB of 0.023 MB uploadedwandb: \ 0.023 MB of 0.023 MB uploadedwandb: 
+wandb: Run history:
+wandb:                ood_e_distance_mean █▁
+wandb:                       ood_mmd_mean █▁
+wandb:                 ood_r_squared_mean ▁█
+wandb:              ood_sinkhorn_div_mean █▁
+wandb:    pca_decoded_ood_e_distance_mean █▁
+wandb:           pca_decoded_ood_mmd_mean █▁
+wandb:     pca_decoded_ood_r_squared_mean ▁█
+wandb:  pca_decoded_ood_sinkhorn_div_mean █▁
+wandb:   pca_decoded_test_e_distance_mean █▁
+wandb:          pca_decoded_test_mmd_mean █▁
+wandb:    pca_decoded_test_r_squared_mean ▁█
+wandb: pca_decoded_test_sinkhorn_div_mean █▁
+wandb:               test_e_distance_mean █▁
+wandb:                      test_mmd_mean █▁
+wandb:                test_r_squared_mean ▁█
+wandb:             test_sinkhorn_div_mean █▁
+wandb: 
+wandb: Run summary:
+wandb:                ood_e_distance_mean 1.04324
+wandb:                       ood_mmd_mean 0.00368
+wandb:                 ood_r_squared_mean 0.99593
+wandb:              ood_sinkhorn_div_mean 16.85828
+wandb:    pca_decoded_ood_e_distance_mean 1.04324
+wandb:           pca_decoded_ood_mmd_mean 0.00367
+wandb:     pca_decoded_ood_r_squared_mean 0.99832
+wandb:  pca_decoded_ood_sinkhorn_div_mean 16.85558
+wandb:   pca_decoded_test_e_distance_mean 0.61937
+wandb:          pca_decoded_test_mmd_mean 0.00923
+wandb:    pca_decoded_test_r_squared_mean 0.99894
+wandb: pca_decoded_test_sinkhorn_div_mean 13.58187
+wandb:               test_e_distance_mean 0.61937
+wandb:                      test_mmd_mean 0.00923
+wandb:                test_r_squared_mean 0.99747
+wandb:             test_sinkhorn_div_mean 13.58212
+wandb: 
+wandb: 🚀 View run super-voice-8 at: https://wandb.ai/modality_translation/satija_ifng_otfm/runs/yqemywln
+wandb: ⭐️ View project at: https://wandb.ai/modality_translation/satija_ifng_otfm
+wandb: Synced 5 W&B file(s), 0 media file(s), 0 artifact file(s) and 0 other file(s)
+wandb: Find logs at: /lustre/groups/ml01/workspace/ot_perturbation/data/satija/out/wandb/run-20240829_105709-yqemywln/logs
+wandb: WARNING The new W&B backend becomes opt-out in version 0.18.0; try it out with `wandb.require("core")`! See https://wandb.me/wandb-core for more information.

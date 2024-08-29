@@ -4,7 +4,7 @@ defaults:
   - override /hydra/sweeper/sampler: random
   - override /hydra/sweeper: optuna
 
-optimized_metric: ood_sinkhorn_div_1
+optimized_metric: r_squared
 
 hydra:
   sweeper:
@@ -12,9 +12,9 @@ hydra:
 
     direction: minimize
 
-    n_jobs: 1000
+    n_jobs: 5
 
-    n_trials: 1000
+    n_trials: 5
 
     sampler:
       _target_: optuna.samplers.RandomSampler

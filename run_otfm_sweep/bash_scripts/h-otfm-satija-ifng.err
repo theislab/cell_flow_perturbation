@@ -1,0 +1,23 @@
+/home/icb/lea.zimmermann/projects/cell_flow_perturbation/run_otfm_sweep/train_satija_ifng.py:13: UserWarning: 
+The version_base parameter is not specified.
+Please specify a compatability version level, or None.
+Will assume defaults for version 1.1
+  @hydra.main(config_path="conf", config_name="train_ifng")
+[32m[I 2024-08-29 11:07:18,916][0m A new study created in memory with name: no-name-743c5f8d-834f-4543-bf91-b169fd49bc90[0m
+Error executing job with overrides: ['model.condition_embedding_dim=1024', 'model.time_encoder_dims=[2048,2048,2048]', 'model.time_encoder_dropout=0.0', 'model.hidden_dims=[2048,2048,2048]', 'model.decoder_dropout=0.2', 'model.layers_after_pool.layer_type=self_attention', 'model.layers_after_pool.dims=[512,512]', 'model.cond_output_dropout=0.5', 'training.multi_steps=50', 'training.batch_size=512', 'model.flow.constant_noise=1.0', 'model.match_kwargs.epsilon=0.01', 'model.match_kwargs.tau_a=0.9', 'model.match_kwargs.tau_b=0.99', 'dataset=satija_ifng', 'hparams_search=satija_ifng', 'model=satija_ifng', 'training=satija_ifng', 'logger=satija_ifng']
+Traceback (most recent call last):
+  File "/lustre/groups/ml01/workspace/lea.zimmermann/software/miniconda3/envs/ot/lib/python3.10/site-packages/hydra/_internal/utils.py", line 220, in run_and_report
+    return func()
+  File "/lustre/groups/ml01/workspace/lea.zimmermann/software/miniconda3/envs/ot/lib/python3.10/site-packages/hydra/_internal/utils.py", line 466, in <lambda>
+    lambda: hydra.multirun(
+  File "/lustre/groups/ml01/workspace/lea.zimmermann/software/miniconda3/envs/ot/lib/python3.10/site-packages/hydra/_internal/hydra.py", line 162, in multirun
+    ret = sweeper.sweep(arguments=task_overrides)
+  File "/lustre/groups/ml01/workspace/lea.zimmermann/software/miniconda3/envs/ot/lib/python3.10/site-packages/hydra_plugins/hydra_optuna_sweeper/optuna_sweeper.py", line 52, in sweep
+    return self.sweeper.sweep(arguments)
+  File "/lustre/groups/ml01/workspace/lea.zimmermann/software/miniconda3/envs/ot/lib/python3.10/site-packages/hydra_plugins/hydra_optuna_sweeper/_impl.py", line 391, in sweep
+    raise e
+  File "/lustre/groups/ml01/workspace/lea.zimmermann/software/miniconda3/envs/ot/lib/python3.10/site-packages/hydra_plugins/hydra_optuna_sweeper/_impl.py", line 357, in sweep
+    values = [float(ret.return_value)]
+  File "/lustre/groups/ml01/workspace/lea.zimmermann/software/miniconda3/envs/ot/lib/python3.10/site-packages/hydra/core/utils.py", line 260, in return_value
+    raise self._return_value
+ImportError: wandb is not installed, please install it via `pip install wandb`
