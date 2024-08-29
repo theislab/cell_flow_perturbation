@@ -7,7 +7,6 @@ import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import scanpy as sc
-import scipy.stats as stats
 import seaborn as sns
 from pandas.core.dtypes.common import is_number
 from pandas.plotting._matplotlib.tools import create_subplots as _subplots
@@ -152,7 +151,7 @@ def _get_alpha(i: int, n: int, start: float = 0.4, end: float = 1.0) -> float:
     return start + (1 + i) * (end - start) / n
 
 
-def _is_numeric(x):
+def _is_numeric(x: ArrayLike) -> bool:
     """Whether the array x is numeric."""
     return all(is_number(i) for i in x)
 
@@ -172,7 +171,9 @@ def _moving_average(a: ArrayLike, n: int = 3, zero_padded: bool = False) -> Arra
         return ret[n - 1 :] / n
 
 
-def _grouped_df_to_standard(grouped, column):
+def _grouped_df_to_standard(
+    grouped: pd.api.typing.DataFrameGroupBy, column: str | None
+) -> tuple[pd.DataFrame, list[str], list[str]]:
     converted = []
     labels = []
     for i, (key, group) in enumerate(grouped):
@@ -190,6 +191,7 @@ def _grouped_df_to_standard(grouped, column):
 def _joyplot(
     data: pd.DataFrame,
     grid: bool = False,
+    density_fit: Literal["log1p", "raw"] = "raw",
     labels=None,
     sublabels=None,
     xlabels=True,
@@ -203,7 +205,6 @@ def _joyplot(
     hist: bool = False,
     bins=10,
     fade: bool = False,
-    xlim=None,
     ylim="max",
     fill=True,
     linecolor=None,
@@ -218,9 +219,8 @@ def _joyplot(
     colormap: str | mpl.colors.Colormap | None = None,
     color=None,
     normalize: bool = True,
-    floc=None,
     **kwargs,
-):
+) -> tuple[plt.Figure, list[plt.Axes]]:
     if fill is True and linecolor is None:
         linecolor = "k"
 
@@ -240,7 +240,7 @@ def _joyplot(
                 j % num_cycle_colors
             ]
         else:
-            return colormap(i / num_axes)
+            return colormap(i / num_axes)  # type: ignore[operator]
 
     ygrid = grid is True or grid == "y" or grid == "both"
     xgrid = grid is True or grid == "x" or grid == "both"
@@ -250,7 +250,7 @@ def _joyplot(
     if x_range is None:
         global_x_range = _x_range([v for g in data for sg in g for v in sg])
     else:
-        global_x_range = _x_range(x_range, 0.0)
+        global_x_range = _x_range(x_range, 0.0)  # type: ignore[arg-type]
 
     # Each plot will have its own axis
     fig, axes = _subplots(
@@ -292,7 +292,7 @@ def _joyplot(
 
         if hist:
             # matplotlib hist() already handles multiple subgroups in a histogram
-            a.hist(
+            ax = a.hist(
                 group,
                 label=sublabels,
                 bins=bins,
@@ -329,9 +329,9 @@ def _joyplot(
                 element_zorder = group_zorder + j / (num_subgroups + 1)
                 element_color = _get_color(i, num_axes, j, num_subgroups)
 
-                _plot_density(
+                ax = _plot_density(
                     a,
-                    x_range,
+                    x_range,  # type: ignore[arg-type]
                     subgroup,
                     fill=fill,
                     linecolor=linecolor,
@@ -340,6 +340,7 @@ def _joyplot(
                     color=element_color,
                     normalize=normalize,
                     bins=bins,
+                    density_fit=density_fit,
                     **kwargs,
                 )
 
@@ -431,85 +432,53 @@ def _joyplot(
 
 
 def _plot_density(
-    ax,
-    x_range,
-    v,
-    kind="kde",
+    ax: plt.Axes,
+    x_range: ArrayLike,
+    v: ArrayLike,
     bw_method=None,
-    bins=50,
-    fill=False,
-    linecolor=None,
-    clip_on=True,
-    normalize=True,
-    floc=None,
+    fill: bool = False,
+    linecolor: Any = None,
+    density_fit: Literal["log1p", "raw"] = "raw",
+    clip_on: bool = True,
     **kwargs,
-):
+) -> plt.Axes:
     v = _remove_na(v)
     if len(v) == 0 or len(x_range) == 0:
         return
-
-    if kind == "kde":
-        try:
-            gkde = gaussian_kde(v, bw_method=bw_method)
-            y = gkde.evaluate(x_range)
+    try:
+        gkde = gaussian_kde(v, bw_method=bw_method)
+        y = gkde.evaluate(x_range)
+        if density_fit == "log1p":
             y = np.log(y + 1.0)
-        except ValueError:
-            # Handle cases where there is no data in a group.
+        elif density_fit == "raw":
+            y = y
+        else:
+            raise ValueError("density_fit must be either 'log1p' or 'raw'.")
+    except ValueError:
+        # Handle cases where there is no data in a group.
+        y = np.zeros_like(x_range)
+    except np.linalg.LinAlgError as e:
+        # Handle singular matrix in kde computation.
+        distinct_values = np.unique(v)
+        if len(distinct_values) == 1:
+            # In case of a group with a single value val,
+            # that should have infinite density,
+            # return a δ(val)
+            val = distinct_values[0]
+            _logging.logger.warning(
+                f"The data contains a group with a single distinct value ({val}) "
+                "having infinite probability density. "
+                "Consider using a different visualization."
+            )
+
+            # Find index i of x_range
+            # such that x_range[i-1] < val ≤ x_range[i]
+            i = np.searchsorted(x_range, val)
+
             y = np.zeros_like(x_range)
-        except np.linalg.LinAlgError as e:
-            # Handle singular matrix in kde computation.
-            distinct_values = np.unique(v)
-            if len(distinct_values) == 1:
-                # In case of a group with a single value val,
-                # that should have infinite density,
-                # return a δ(val)
-                val = distinct_values[0]
-                _logging.logger.warning(
-                    f"The data contains a group with a single distinct value ({val}) "
-                    "having infinite probability density. "
-                    "Consider using a different visualization."
-                )
-
-                # Find index i of x_range
-                # such that x_range[i-1] < val ≤ x_range[i]
-                i = np.searchsorted(x_range, val)
-
-                y = np.zeros_like(x_range)
-                y[i] = 1
-            else:
-                raise e
-
-    elif kind == "lognorm":
-        if floc is not None:
-            lnparam = stats.lognorm.fit(v, loc=floc)
+            y[i] = 1
         else:
-            lnparam = stats.lognorm.fit(v)
-
-        lpdf = stats.lognorm.pdf(x_range, lnparam[0], lnparam[1], lnparam[2])
-        if normalize:
-            y = lpdf / lpdf.sum()
-        else:
-            y = lpdf
-    elif kind == "counts":
-        y, bin_edges = np.histogram(v, bins=bins, range=(min(x_range), max(x_range)))
-        # np.histogram returns the edges of the bins.
-        # We compute here the middle of the bins.
-        x_range = _moving_average(bin_edges, 2)
-    elif kind == "normalized_counts":
-        y, bin_edges = np.histogram(
-            v, bins=bins, density=False, range=(min(x_range), max(x_range))
-        )
-        # np.histogram returns the edges of the bins.
-        # We compute here the middle of the bins.
-        y = y / len(v)
-        x_range = _moving_average(bin_edges, 2)
-    elif kind == "values":
-        # Warning: to use values and get a meaningful visualization,
-        # x_range must also be manually set in the main function.
-        y = v
-        x_range = list(range(len(y)))
-    else:
-        raise NotImplementedError
+            raise e
 
     if fill:
 
@@ -532,3 +501,4 @@ def _plot_density(
         kwargs["label"] = None
 
     ax.plot(x_range, y, clip_on=clip_on, **kwargs)
+    return ax

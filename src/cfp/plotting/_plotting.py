@@ -189,6 +189,7 @@ def plot_densities(
     data: pd.DataFrame,
     features: Sequence[str],
     group_by: str | None = None,
+    density_fit: Literal["log1p", "raw"] = "raw",
     ax: mpl.axes.Axes | None = None,
     figsize: tuple[float, float] | None = None,
     dpi: int | None = None,
@@ -214,6 +215,7 @@ def plot_densities(
     color: Any = None,
     normalize: bool = True,
     grid: bool = False,
+    return_fig: bool = True,
     **kwargs,
 ):
     """Plot kernel density estimations of expressions.
@@ -228,6 +230,9 @@ def plot_densities(
         Features whose density to plot.
     group_by
         Column in ``'data'`` to group by.
+    density_fit
+        Type of density fit to use. If "raw", the kernel density estimation is plotted. If "log1p", the log1p
+        transformed values of the densities are plotted.
     ax
         :class:`matplotlib.axes.Axes` used for plotting. If :obj:`None`, create a new one.
     figsize
@@ -284,16 +289,21 @@ def plot_densities(
         Whether to normalize the densities.
     grid
         Whether to show the grid.
+    return_fig
+        Whether to return the figure.
     kwargs
         Additional keyword arguments for the plot.
 
+    Returns
+    -------
+    :class:`matplotlib.figure.Figure` if ``'return_fig'`` is :obj:`True`, else :obj:`None`.
     """
     if group_by is not None and isinstance(data, pd.DataFrame):
         grouped = data.groupby(group_by)
         if features is None:
             features = list(data.columns)
             features.remove(group_by)
-        converted, _labels, sublabels = _grouped_df_to_standard(grouped, features)
+        converted, _labels, sublabels = _grouped_df_to_standard(grouped, features)  # type: ignore[arg-type]
         if labels is None:
             labels = _labels
     elif isinstance(data, pd.DataFrame):
@@ -318,7 +328,7 @@ def plot_densities(
     if any(len(subg) == 0 for g in converted for subg in g):
         _logging.logger.warning("At least a column/group has no numeric values.")
 
-    return _joyplot(
+    fig, axes = _joyplot(
         converted,
         labels=labels,
         sublabels=sublabels,
@@ -345,5 +355,7 @@ def plot_densities(
         colormap=colormap,
         color=color,
         normalize=normalize,
+        density_fit=density_fit,
         **kwargs,
     )
+    return fig if return_fig else None
