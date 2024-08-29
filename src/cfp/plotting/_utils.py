@@ -1,13 +1,15 @@
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Literal
 
 import anndata as ad
+import matplotlib as mpl
 import matplotlib.pyplot as plt
 import numpy as np
 import pandas as pd
 import scanpy as sc
 import scipy.stats as stats
 import seaborn as sns
+from pandas.core.dtypes.common import is_number
 from pandas.plotting._matplotlib.tools import create_subplots as _subplots
 from pandas.plotting._matplotlib.tools import flatten_axes as _flatten
 from scipy.stats import gaussian_kde
@@ -150,6 +152,11 @@ def _get_alpha(i: int, n: int, start: float = 0.4, end: float = 1.0) -> float:
     return start + (1 + i) * (end - start) / n
 
 
+def _is_numeric(x):
+    """Whether the array x is numeric."""
+    return all(is_number(i) for i in x)
+
+
 def _remove_na(data: list[Any] | ArrayLike | pd.Series) -> ArrayLike:
     """Remove NA values from the data."""
     return pd.Series(data).dropna().values
@@ -165,9 +172,24 @@ def _moving_average(a: ArrayLike, n: int = 3, zero_padded: bool = False) -> Arra
         return ret[n - 1 :] / n
 
 
+def _grouped_df_to_standard(grouped, column):
+    converted = []
+    labels = []
+    for i, (key, group) in enumerate(grouped):
+        if column is not None:
+            group = group[column]
+        labels.append(key)
+        converted.append(
+            [_remove_na(group[c]) for c in group.columns if _is_numeric(group[c])]
+        )
+        if i == 0:
+            sublabels = [col for col in group.columns if _is_numeric(group[col])]
+    return converted, labels, sublabels
+
+
 def _joyplot(
-    data,
-    grid=False,
+    data: pd.DataFrame,
+    grid: bool = False,
     labels=None,
     sublabels=None,
     xlabels=True,
@@ -175,26 +197,27 @@ def _joyplot(
     xrot=None,
     ylabelsize=None,
     yrot=None,
-    ax=None,
-    figsize=None,
-    hist=False,
+    ax: mpl.axes.Axes | None = None,
+    dpi: int | None = None,
+    figsize: tuple[float, float] | None = None,
+    hist: bool = False,
     bins=10,
-    fade=False,
+    fade: bool = False,
     xlim=None,
     ylim="max",
     fill=True,
     linecolor=None,
-    overlap=1,
-    background=None,
-    range_style="all",
-    x_range=None,
-    tails=0.2,
-    title=None,
+    overlap: float = 1.0,
+    background: Any = None,
+    range_style: Literal["all", "individual", "group"] | list[float] = "all",
+    x_range: tuple[float, float] = None,
+    tails: float = 0.2,
+    title: str | None = None,
     legend=False,
     loc="upper right",
-    colormap=None,
+    colormap: str | mpl.colors.Colormap | None = None,
     color=None,
-    normalize=True,
+    normalize: bool = True,
     floc=None,
     **kwargs,
 ):
@@ -232,6 +255,7 @@ def _joyplot(
     # Each plot will have its own axis
     fig, axes = _subplots(
         naxes=num_axes,
+        dpi=dpi,
         ax=ax,
         squeeze=False,
         sharex=True,
@@ -285,13 +309,13 @@ def _joyplot(
                 if range_style == "all":
                     # All plots have the same range
                     x_range = global_x_range
-                elif range_style == "own":
+                elif range_style == "individual":
                     # Each plot has its own range
                     x_range = _x_range(subgroup, tails)
                 elif range_style == "group":
                     # Each plot has a range that covers the whole group
                     x_range = _x_range(group, tails)
-                elif isinstance(range_style, list | np.ndarray):
+                elif isinstance(range_style, list):
                     # All plots have exactly the range passed as argument
                     x_range = _x_range(range_style, 0.0)
                 else:
@@ -314,6 +338,7 @@ def _joyplot(
                     label=sublabel,
                     zorder=element_zorder,
                     color=element_color,
+                    normalize=normalize,
                     bins=bins,
                     **kwargs,
                 )
@@ -351,7 +376,7 @@ def _joyplot(
         for a in _axes:
             a.set_ylim([min_ylim - 0.1 * (max_ylim - min_ylim), max_ylim])
 
-    elif ylim == "own":
+    elif ylim is None:
         # Do nothing, each axis keeps its own ylim
         pass
 
