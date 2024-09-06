@@ -7,6 +7,7 @@ import jax.tree as jt
 import jax.tree_util as jtu
 import numpy as np
 from numpy.typing import ArrayLike
+import random
 
 from cfp.metrics._metrics import compute_e_distance, compute_r_squared, compute_scalar_mmd, compute_sinkhorn_div
 
@@ -18,6 +19,7 @@ __all__ = [
     "WandbLogger",
     "CallbackRunner",
     "PCADecodedMetrics",
+    "SampledMetrics", 
 ]
 
 
@@ -210,6 +212,100 @@ class Metrics(ComputationCallback):
             Predicted data
         """
         return self.on_log_iteration(validation_data, predicted_data)
+    
+    
+
+class SampledMetrics(ComputationCallback):
+    """Callback to compute metrics on sampled validation data during training
+
+    Parameters
+    ----------
+    sample_size : int
+        Number of samples to use for metric computation
+    metrics : list
+        List of metrics to compute. Supported metrics are "sinkhorn_div", "e_distance", and "mmd".
+    metric_aggregations : list
+        List of aggregation functions to use for each metric. Supported aggregations are "mean" and "median".
+    log_prefix : str
+        Prefix to add to the log keys.
+    """
+
+    def __init__(
+        self,
+        sample_size: int,
+        metrics: list[Literal["sinkhorn_div", "e_distance", "mmd"]],
+        metric_aggregations: list[Literal["mean", "median"]] = None,
+        log_prefix: str = "sampled_",
+    ):
+        self.sample_size = sample_size
+        self.metrics = metrics
+        self.metric_aggregation = (
+            ["mean"] if metric_aggregations is None else metric_aggregations
+        )
+        self.log_prefix = log_prefix
+        
+        for metric in metrics:
+            if metric not in ["sinkhorn_div", "e_distance", "mmd"]:
+                raise ValueError(
+                    f"Metric {metric} not supported. Supported metrics are 'sinkhorn_div', 'e_distance', and 'mmd'"
+                )
+
+    def on_train_begin(self, *args: Any, **kwargs: Any) -> Any:
+        """Called at the beginning of training."""
+        pass
+
+    def sample_data(self, data: ArrayLike) -> ArrayLike:
+        """Sample data randomly"""
+        if len(data) <= self.sample_size:
+            return data
+        indices = random.sample(range(len(data)), self.sample_size)
+        return data[indices]
+
+    def on_log_iteration(
+        self,
+        validation_data: dict[str, dict[str, ArrayLike]],
+        predicted_data: dict[str, dict[str, ArrayLike]],
+    ) -> dict[str, float]:
+        """Called at each validation/log iteration to compute metrics on sampled data
+
+        Args:
+            validation_data: Validation data
+            predicted_data: Predicted data
+        """
+        metrics = {}
+        for metric in self.metrics:
+            for k in validation_data.keys():
+                sampled_validation = self.sample_data(validation_data[k])
+                sampled_predicted = self.sample_data(predicted_data[k])
+                
+                if metric == "sinkhorn_div":
+                    result = compute_sinkhorn_div(sampled_validation, sampled_predicted)
+                elif metric == "e_distance":
+                    result = compute_e_distance(sampled_validation, sampled_predicted)
+                elif metric == "mmd":
+                    result = compute_scalar_mmd(sampled_validation, sampled_predicted)
+                
+                for agg_fn in self.metric_aggregation:
+                    metrics[f"{self.log_prefix}{k}_{metric}_{agg_fn}"] = agg_fn_to_func[agg_fn](result)
+
+        return metrics
+
+    def on_train_end(
+        self,
+        validation_data: dict[str, dict[str, ArrayLike]],
+        predicted_data: dict[str, dict[str, ArrayLike]],
+    ) -> dict[str, float]:
+        """Called at the end of training to compute metrics
+
+        Parameters
+        ----------
+        validation_data : dict
+            Validation data
+        predicted_data : dict
+            Predicted data
+        """
+        return self.on_log_iteration(validation_data, predicted_data)
+
 
 
 class PCADecodedMetrics(Metrics):
