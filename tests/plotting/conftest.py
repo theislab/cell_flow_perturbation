@@ -27,3 +27,10 @@ def adata_with_condition_embedding(adata_perturbation) -> ad.AnnData:
     adata_perturbation.uns[_constants.CFP_KEY] = {}
     adata_perturbation.uns[_constants.CFP_KEY][_constants.CONDITION_EMBEDDING] = df
     return adata_perturbation
+
+
+@pytest.fixture
+def df_joyplot() -> pd.DataFrame:
+    test_df = pd.DataFrame(data=np.random.randn(100, 2), columns=["x", "y"])
+    test_df["dosage"] = np.random.choice([0.0, 1.0, 2.0], 100)
+    return test_df
