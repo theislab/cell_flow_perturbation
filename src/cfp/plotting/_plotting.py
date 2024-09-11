@@ -8,6 +8,7 @@ import numpy as np
 import seaborn as sns
 from adjustText import adjust_text
 
+import cfp
 from cfp import _constants
 from cfp.plotting._utils import (
     _compute_kernel_pca_from_df,
@@ -173,5 +174,47 @@ def plot_condition_embedding(
     ax.set_ylabel(f"dim {dimensions[1]}", fontsize=fontsize)
     ax.xaxis.set_tick_params(labelsize=fontsize)
     ax.yaxis.set_tick_params(labelsize=fontsize)
+
+    return fig if return_fig else None
+
+
+def plot_train_metrics(
+    model: cfp.model.CellFlow,
+    metric: str = "loss",
+    return_fig: bool = True,
+    **kwargs: Any,
+) -> mpl.figure.Figure:
+    """Plot training metrics.
+
+    Parameters
+    ----------
+        model
+            CellFlow model.
+        metric
+            Name of the metric to plot.
+        return_fig
+            Whether to return the figure.
+        kwargs
+            Additional keyword arguments for plotting.
+
+    Returns
+    -------
+        :obj:`None` or :class:`matplotlib.figure.Figure`, depending on `return_fig`.
+    """
+    fig_width = kwargs.pop("fig_width", 8)
+    fig_height = kwargs.pop("fig_height", 4)
+
+    fig = plt.figure(figsize=(fig_width, fig_height))
+    ax = plt.gca()
+
+    sns.lineplot(
+        x=np.arange(len(model.train_metrics[metric])),
+        y=model.train_metrics[metric],
+        ax=ax,
+    )
+
+    ax.set_title(f"Training {metric}")
+    ax.set_xlabel("Epoch")
+    ax.set_ylabel(metric)
 
     return fig if return_fig else None
