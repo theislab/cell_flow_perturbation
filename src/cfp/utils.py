@@ -1,14 +1,13 @@
 from typing import Any, Literal
 
 import jax.numpy as jnp
+import numpy as np
 import pandas as pd
 from ott.geometry import costs, pointcloud
 from ott.problems.linear import linear_problem
 from ott.solvers.linear import sinkhorn
 from sklearn.cross_decomposition import CCA
 from sklearn.decomposition import KernelPCA
-
-from cfp._logging import logger
 
 ScaleCost_t = float | Literal["mean", "max_cost", "median"]
 
@@ -104,12 +103,14 @@ def predict_with_cca(
 
     cca = CCA(n_components=1)  # TODO: possibly extend to multiple variables
     cca.fit(X_transformed, y)
-
-    logger.info(
-        f"Coefficient of determination R^2 of the prediction is {cca.score(X_transformed, y):.2f}"
-    )
+    _, y_c = cca.transform(X_transformed, y)
+    correct_orientation = np.corrcoef((y_c.squeeze()), y)[0, 1] > 0.0
 
     X_new = embeddings_unseen.values
     X_new_transformed = kpca.transform(X_new)
     y_pred = cca.predict(X_new_transformed)
-    return pd.Series(index=embeddings_unseen.index, data=y_pred)
+
+    return pd.Series(
+        index=embeddings_unseen.index,
+        data=y_pred * (1.0 if correct_orientation else -1.0),
+    )
