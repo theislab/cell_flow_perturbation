@@ -331,9 +331,10 @@ class VAEDecodedMetrics(Metrics):
         return metrics
 
     def _create_anndata(self, data: ArrayLike) -> ad.AnnData:
-    
+
         adata = ad.AnnData(
-            X=np.empty((len(data), self._adata_n_vars)), obs=self._adata_obs[:len(data)]
+            X=np.empty((len(data), self._adata_n_vars)),
+            obs=self._adata_obs[: len(data)],
         )
         adata.obsm["X_scVI"] = data  # TODO: make package constant
         return adata

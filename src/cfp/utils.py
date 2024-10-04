@@ -1,9 +1,14 @@
 from typing import Any, Literal
 
 import jax.numpy as jnp
+import pandas as pd
 from ott.geometry import costs, pointcloud
 from ott.problems.linear import linear_problem
 from ott.solvers.linear import sinkhorn
+from sklearn.cross_decomposition import CCA
+from sklearn.decomposition import KernelPCA
+
+from cfp._logging import logger
 
 ScaleCost_t = float | Literal["mean", "max_cost", "median"]
 
@@ -61,3 +66,50 @@ def match_linear(
     solver = sinkhorn.Sinkhorn(threshold=threshold, **kwargs)
     out = solver(problem)
     return out.matrix
+
+
+def predict_with_cca(
+    embeddings_seen: pd.Series,
+    target_variable: pd.Series,
+    embeddings_unseen: pd.Series,
+    kernel_pca_mode: Literal["linear", "poly", "rbf", "sigmoid", "cosine"],
+    kernel_pca_n_components: int = 10,
+) -> pd.Series:
+    """Predict target variable for unseen data using canonical correlation analysis (CCA).
+
+    Parameters
+    ----------
+    embeddings_seen
+        Embeddings of the seen data. Index corresponding to condition names, values to embeddings.
+    target_variable
+        Target variable of the seen data. Index corresponding to condition names, values to target variable.
+    embeddings_unseen
+        Embeddings of the unseen data. Index corresponding to condition names, values to embeddings which to
+        predict the target variable.
+    kernel_pca_mode
+        Kernel for the KernelPCA.
+    kernel_pca_n_components
+        Number of components to keep in the KernelPCA.
+
+
+    Returns
+    -------
+    Predicted target variable for the unseen data.
+    """
+    kpca = KernelPCA(n_components=kernel_pca_n_components, kernel=kernel_pca_mode)
+    X = embeddings_seen.values
+    y = target_variable.loc[embeddings_seen.index].values
+
+    X_transformed = kpca.fit_transform(X)
+
+    cca = CCA(n_components=1)  # TODO: possibly extend to multiple variables
+    cca.fit(X_transformed, y)
+
+    logger.info(
+        f"Coefficient of determination R^2 of the prediction is {cca.score(X_transformed, y):.2f}"
+    )
+
+    X_new = embeddings_unseen.values
+    X_new_transformed = kpca.transform(X_new)
+    y_pred = cca.predict(X_new_transformed)
+    return pd.Series(index=embeddings_unseen.index, data=y_pred)
