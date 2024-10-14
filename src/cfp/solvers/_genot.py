@@ -14,7 +14,7 @@ from ott.solvers import utils as solver_utils
 
 from cfp._constants import GENOT_CELL_KEY
 from cfp._types import ArrayLike
-from cfp.model._utils import _multivariate_normal
+from cfp._distributions import _multivariate_normal
 
 __all__ = ["GENOT"]
 
