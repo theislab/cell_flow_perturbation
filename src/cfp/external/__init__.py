@@ -1,1 +1,1 @@
-from cfp.external._scvi import CFJaxSCVI
+from cfp.external._scvi import CFJaxSCVI, NegativeBinomial
