@@ -5,6 +5,7 @@ from cfp.networks._set_encoders import (
                                         SelfAttention,
                                         TokenAttentionPooling,
 )
+from cfp.networks._cfgen_ae import CFGenEncoder, CFGenDecoder
 from cfp.networks._velocity_field import ConditionalVelocityField
 
 __all__ = [
@@ -14,4 +15,7 @@ __all__ = [
     "SelfAttention",
     "SeedAttentionPooling",
     "TokenAttentionPooling",
+    "CFGenEncoder",
+    "CFGenDecoder",
+    "CFGenAE"
 ]
