@@ -23,6 +23,7 @@ from cfp.data._dataloader import PredictionSampler, TrainSampler, ValidationSamp
 from cfp.data._datamanager import DataManager
 from cfp.model._utils import _write_predictions
 from cfp.networks._velocity_field import ConditionalVelocityField
+from cfp.networks._cfgen_ae import CFGenEncoder, CFGenDecoder
 from cfp.plotting import _utils
 from cfp.solvers import _genot, _otfm
 from cfp.training._callbacks import BaseCallback
@@ -250,6 +251,7 @@ class CellFlow:
         flow: dict[Literal["constant_noise", "bridge"], float] | None = None,
         match_fn: Callable[[ArrayLike, ArrayLike], ArrayLike] = match_linear,
         optimizer: optax.GradientTransformation = optax.adam(1e-4),
+        cfgen_optimizer: optax.GradientTransformation = optax.adam(1e-4),
         layer_norm_before_concatenation: bool = False,
         linear_projection_before_concatenation: bool = False,
         genot_source_layers: Layers_t | None = None,
@@ -414,13 +416,17 @@ class CellFlow:
         flow = flow or {"constant_noise": 0.0}
 
         ## preparing cfgen models
+        cfgen_encoder = cfgen_decoder = None
         if ae == "cfgen":
-            self._cfgen = CFGen(self.adata)
-            self._cfgen.prepare_model(**cfgen_kwargs)
-            self._cfgen_ae_trainer = self._cfgen.trainer
-            cfgen_encoder, cfgen_decoder = self._cfgen.encoder, self._cfgen.decoder
-        else:
-            cfgen_encoder = cfgen_decoder = None
+            cfgen_encoder = CFGenEncoder(**cfgen_kwargs)
+            cfgen_decoder = CFGenDecoder(**cfgen_kwargs)
+            self.cfgen = CFGen(
+                cfgen_encoder, 
+                cfgen_decoder, 
+                {"rng": jax.random.PRNGKey(seed), "optimizer": cfgen_optimizer}, 
+                {"rng": jax.random.PRNGKey(seed), "optimizer": cfgen_optimizer}
+            )
+            
         self.vf = ConditionalVelocityField(
             output_dim=self._data_dim,
             max_combination_length=self.train_data.max_combination_length,
@@ -444,7 +450,6 @@ class CellFlow:
             layer_norm_before_concatenation=layer_norm_before_concatenation,
             linear_projection_before_concatenation=linear_projection_before_concatenation,
             ae=ae,
-            #cfgen_kwargs = cfgen_kwargs
             cfgen_encoder=cfgen_encoder,
             cfgen_decoder=cfgen_decoder
         )
@@ -487,8 +492,7 @@ class CellFlow:
             )
         self._trainer = CellFlowTrainer(solver=self.solver)  # type: ignore[arg-type]
         if ae == "cfgen":
-            #self._cfgen_ae_trainer = CFGenAETrainer(self.vf.x_encoder, self.vf.decoder)
-            ...
+            self._cfgen_ae_trainer = CFGenAETrainer(self.cfgen)
 
     def pretrain_cfgen_ae(
         self,

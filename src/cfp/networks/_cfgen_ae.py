@@ -70,9 +70,12 @@ class CFGenEncoder(BaseModule):
     def __call__(
             self, 
             X: dict[str, jnp.ndarray] | jnp.ndarray,
-            training: bool
+            training: bool = True
         ) -> dict[str, jnp.ndarray] | jnp.ndarray:
         """Encodes the Input"""
+        ## hack for handling unimodal case
+        if isinstance(X, jnp.ndarray):
+            X = {"rna": X}
         modality_list = list(self.encoder_kwargs.keys())
         z = {}
         #for mod in self.modality_list:
@@ -85,6 +88,33 @@ class CFGenEncoder(BaseModule):
             z_joint = jnp.concatenate([z[mod] for mod in z], axis=-1)
             z = self.encoder_joint(z_joint, training = training)     
         return z
+
+    def create_train_state(
+        self,
+        rng: jax.Array,
+        optimizer: optax.OptState,
+        input_dim: int,
+    ) -> train_state.TrainState:
+        """Create the training state.
+
+        Parameters
+        ----------
+            rng
+                Random number generator.
+            optimizer
+                Optimizer.
+            input_dim
+                Dimensionality of the velocity field.
+
+        Returns
+        -------
+            The training state.
+        """
+        x = jnp.ones((1, input_dim))
+        params = self.init(rng, x, training=False)["params"]
+        return train_state.TrainState.create(
+            apply_fn=self.apply, params=params, tx=optimizer
+        )
 
 class CFGenDecoder(BaseModule):
     """
@@ -133,9 +163,13 @@ class CFGenDecoder(BaseModule):
             self, 
             z: jnp.ndarray,
             size_factor: jnp.ndarray,
-            training: bool
+            training: bool = True
         ) -> dict[str, jnp.ndarray]:
         """Encodes the Input"""
+        ## hack for handling unimodal case
+        if isinstance(z, jnp.ndarray):
+            z = {"rna": z}
+            size_factor = {"rna": size_factor}
         modality_list = list(self.encoder_kwargs.keys())
         mu_hat = {}
         for mod in modality_list:
@@ -151,3 +185,31 @@ class CFGenDecoder(BaseModule):
                 mu_hat_mod = nn.sigmoid(x_mod)
             mu_hat[mod] = mu_hat_mod
         return mu_hat
+    
+    def create_train_state(
+        self,
+        rng: jax.Array,
+        optimizer: optax.OptState,
+        input_dim: int,
+    ) -> train_state.TrainState:
+        """Create the training state.
+
+        Parameters
+        ----------
+            rng
+                Random number generator.
+            optimizer
+                Optimizer.
+            input_dim
+                Dimensionality of the velocity field.
+
+        Returns
+        -------
+            The training state.
+        """
+        x = jnp.ones((1, input_dim))
+        size_factor = jnp.sum(x, axis = 1, keepdims = True)
+        params = self.init(rng, x, size_factor, training=False)["params"]
+        return train_state.TrainState.create(
+            apply_fn=self.apply, params=params, tx=optimizer
+        )

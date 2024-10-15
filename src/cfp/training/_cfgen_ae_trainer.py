@@ -7,7 +7,7 @@ import jax.numpy as jnp
 from numpy.typing import ArrayLike
 from tqdm import tqdm
 
-from cfp.networks._cfgen_ae import CFGenEncoder, CFGenDecoder
+from cfp.model._cfgen import CFGen
 
 from cfp.external import NegativeBinomial
 from cfp.data._dataloader import TrainSampler, ValidationSampler
@@ -32,13 +32,11 @@ class CFGenAETrainer:
     """
     def __init__(
         self,
-        encoder: CFGenEncoder,
-        decoder: CFGenDecoder,
+        cfgen: CFGen,
         seed: int = 0,
     ):
-        self.encoder = encoder
-        self.decoder = decoder
-        self.modality_list = list(self.encoder.encoder_kwargs.keys())
+        self.cfgen = cfgen
+        self.modality_list = list(self.cfgen.encoder.encoder_kwargs.keys())
         self.rng_subsampling = np.random.default_rng(seed)
         self.training_logs: dict[str, Any] = {}
 
@@ -107,33 +105,12 @@ class CFGenAETrainer:
             callbacks=callbacks,
         )
         crun.on_train_begin()
-
-        def forward_pass(
-                batch: dict[str, jnp.ndarray],
-                training: bool
-            ) -> float:
-            """Performs a single optimization step"""
-            ## retrieving size factors
-            src = batch["src_cell_data"]
-            x = {"rna": src}## hack, change asap
-            size_factor = {}
-            for mod in self.modality_list:
-                size_factor[mod] = jnp.sum(x[mod], axis = 1, keepdims = True)
-            ## need to do that stuff with the train state and shit
-            z = self.encoder(x, training) ## AttributeError: "CFGenEncoder" object has no attribute "encoder"
-            x_hat = self.decoder(z, size_factor, training) ## AttributeError: "CFGenDecoder" object has no attribute "decoder"
-            loss = 0.0
-            for mod in self.modality_list:
-                if mod == "rna":
-                    px = NegativeBinomial(mu=x_hat[mod], theta=jnp.exp(self.theta))
-                    loss -= px.log_prob(x).sum(1).mean()
-            return loss
             
         pbar = tqdm(range(num_iterations))
         for it in pbar:
             rng, rng_step_fn = jax.random.split(rng, 2)
             batch = dataloader.sample(rng)
-            loss = forward_pass(batch, True)
+            loss = self.cfgen.fwd_fn(rng, batch, True)
             self.training_logs["loss"].append(float(loss))
 
             if ((it - 1) % valid_freq == 0) and (it > 1):
