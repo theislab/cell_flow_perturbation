@@ -158,6 +158,13 @@ class CFGenDecoder(BaseModule):
             encoder_kwargs[mod]["dims"] = encoder_kwargs[mod]["dims"][::-1]
             decoder[mod] = MLPBlock(**encoder_kwargs[mod])
         self.decoder = decoder
+        ## theta
+        in_dim_rna = self.input_dim["rna"]
+        if not self.covariate_specific_theta:
+            shape = (1)
+        else:
+            shape = (n_cat)
+        self.param('theta', _multivariate_normal, shape = shape, dim = in_dim_rna, mean = 0.0, cov = 1.0)
     
     def __call__(
             self, 

@@ -48,15 +48,15 @@ class CFGen:
                 z = encoder_state.apply_fn({"params": encoder_params}, {"rna": source})
                 #x_hat = decoder_state.apply_fn({"params": decoder_params}, {"rna": z}, {"rna": size_factor})
                 x_hat = decoder_state.apply_fn({"params": decoder_params}, z, {"rna": size_factor})
-                px = NegativeBinomial(mu=x_hat["rna"], theta=jnp.exp(self.theta))
-                loss = -px.log_prob(tgt_counts["rna"]).sum(1).mean()
+                px = NegativeBinomial(mean=x_hat["rna"], inverse_dispersion=jnp.exp(decoder_params["theta"]))
+                loss = -px.log_prob(tgt_counts).sum(1).mean()
                 return loss
             
-            grad_fn = jax.value_and_grad(loss_fn)
-            loss, grads = grad_fn(
+            grad_fn = jax.value_and_grad(loss_fn, argnums=(0, 1))
+            loss, (encoder_grads, decoder_grads) = grad_fn(
                 encoder_state.params, decoder_state.params, source, tgt_counts,
-            )    
-            return encoder_state.apply_gradients(grads=grads), decoder_state.apply_gradients(grads=grads), loss
+            )
+            return encoder_state.apply_gradients(grads=encoder_grads), decoder_state.apply_gradients(grads=decoder_grads), loss
         return ae_fwd_fn
 
     def fwd_fn(self, rng: np.ndarray, batch: dict[str, ArrayLike], training: bool):
@@ -69,6 +69,10 @@ class CFGen:
             tgt_counts,
         )
         return loss
+    
+    def predict(self, src: dict[str, ArrayLike], training: bool):
+        """"""
+        raise NotImplementedError
 
     @property
     def is_trained(self) -> bool:
