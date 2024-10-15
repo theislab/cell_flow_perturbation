@@ -3,11 +3,13 @@ from typing import Any, Literal
 
 import jax
 import numpy as np
+import jax.numpy as jnp
 from numpy.typing import ArrayLike
 from tqdm import tqdm
 
-from cfp.model._cfgen import CFGen
+from cfp.networks._cfgen_ae import CFGenEncoder, CFGenDecoder
 
+from cfp.external import NegativeBinomial
 from cfp.data._dataloader import TrainSampler, ValidationSampler
 from cfp.training._callbacks import BaseCallback, CallbackRunner
 
@@ -30,10 +32,13 @@ class CFGenAETrainer:
     """
     def __init__(
         self,
-        cfgen: CFGen,
+        encoder: CFGenEncoder,
+        decoder: CFGenDecoder,
         seed: int = 0,
     ):
-        self.cfgen = cfgen
+        self.encoder = encoder
+        self.decoder = decoder
+        self.modality_list = list(self.encoder.encoder_kwargs.keys())
         self.rng_subsampling = np.random.default_rng(seed)
         self.training_logs: dict[str, Any] = {}
 
@@ -54,7 +59,7 @@ class CFGenAETrainer:
             batch = vdl.sample(mode=mode)
             src = batch["source"]
             true_tgt = batch["counts"]
-            valid_pred_data[val_key] = jax.tree.map(self.cfgen.predict, src, true_gtg)
+            valid_pred_data[val_key] = jax.tree.map(self.cfgen.predict, src, False)
             valid_true_data[val_key] = true_tgt
 
         return valid_true_data, valid_pred_data
@@ -73,7 +78,7 @@ class CFGenAETrainer:
         valid_loaders: dict[str, ValidationSampler] | None = None,
         monitor_metrics: Sequence[str] = [],
         callbacks: Sequence[BaseCallback] = [],
-    ) -> _otfm.OTFlowMatching | _genot.GENOT:
+    ) -> None:
         """Trains the model.
 
         Parameters
@@ -104,12 +109,19 @@ class CFGenAETrainer:
         crun.on_train_begin()
 
         def forward_pass(
-                self,
-                x: dict[str, jnp.ndarray],
+                batch: dict[str, jnp.ndarray],
                 training: bool
             ) -> float:
             """Performs a single optimization step"""
-            x_hat = self.cfgen.autoencoder(x, training)
+            ## retrieving size factors
+            src = batch["src_cell_data"]
+            x = {"rna": src}## hack, change asap
+            size_factor = {}
+            for mod in self.modality_list:
+                size_factor[mod] = jnp.sum(x[mod], axis = 1, keepdims = True)
+            ## need to do that stuff with the train state and shit
+            z = self.encoder(x, training) ## AttributeError: "CFGenEncoder" object has no attribute "encoder"
+            x_hat = self.decoder(z, size_factor, training) ## AttributeError: "CFGenDecoder" object has no attribute "decoder"
             loss = 0.0
             for mod in self.modality_list:
                 if mod == "rna":
@@ -121,7 +133,7 @@ class CFGenAETrainer:
         for it in pbar:
             rng, rng_step_fn = jax.random.split(rng, 2)
             batch = dataloader.sample(rng)
-            loss = forward_pass(rng_step_fn, batch)
+            loss = forward_pass(batch, True)
             self.training_logs["loss"].append(float(loss))
 
             if ((it - 1) % valid_freq == 0) and (it > 1):
@@ -149,7 +161,3 @@ class CFGenAETrainer:
             )
             metrics = crun.on_train_end(valid_true_data, valid_pred_data)
             self._update_logs(metrics)
-
-        self.solver.is_trained = True
-        return self.solver
-            self.training_logs[k].append(v)

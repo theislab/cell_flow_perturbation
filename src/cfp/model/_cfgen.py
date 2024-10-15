@@ -22,11 +22,11 @@ from cfp.data._data import ConditionData, ValidationData
 from cfp.data._dataloader import PredictionSampler, TrainSampler, ValidationSampler
 from cfp.data._datamanager import DataManager
 from cfp.model._utils import _write_predictions
-from cfp.networks._cfgen_ae import CFGenEncoder, CFGenDecoder, CFGenAE
+from cfp.networks._cfgen_ae import CFGenEncoder, CFGenDecoder
 from cfp.plotting import _utils
 from cfp.solvers import _genot, _otfm
 from cfp.training._callbacks import BaseCallback
-from cfp.training._trainer import CellFlowTrainer
+from cfp.training._cfgen_ae_trainer import CFGenAETrainer
 from cfp.utils import match_linear
 
 __all__ = ["CellFlow"]
@@ -35,11 +35,13 @@ __all__ = ["CellFlow"]
 class CFGen:
     """"""
 
-    def __init__(self, adata: ad.AnnData, solver: Literal["otfm", "genot"] = "otfm"):
+    def __init__(self, adata: ad.AnnData):
         self._adata = adata
+        self._is_trained: bool = False
         self._dataloader: TrainSampler | None = None
-        self._trainer: CFGenTrainer | None = None
-        self._cfgen: CFGenAE | None = None
+        self._trainer: CFGenAETrainer | None = None
+        self._encoder: CFGenEncoder | None = None
+        self._decoder: CFGenDecoder | None = None
         self._validation_data: dict[str, ValidationData] = {}
 
     def prepare_data(
@@ -211,15 +213,21 @@ class CFGen:
         encoder_multimodal_joint_layers: dict[str, Any] | None,
     ) -> None:
         """Initializes the CFGen Auto-Encoder architecture and its trainer"""
-        ## define models
-        self._cfgen = CFGenAE(
+        self._encoder = CFGenEncoder(
             input_dim = input_dim,
             encoder_kwargs = encoder_kwargs,
             covariate_specific_theta = covariate_specific_theta,
             is_binarized = is_binarized,
             encoder_multimodal_joint_layers = encoder_multimodal_joint_layers
         )
-        self._trainer = CFGenTrainer(self._cfgen)  # type: ignore[arg-type]
+        self._decoder = CFGenDecoder(
+            input_dim = input_dim,
+            encoder_kwargs = encoder_kwargs,
+            covariate_specific_theta = covariate_specific_theta,
+            is_binarized = is_binarized,
+            encoder_multimodal_joint_layers = encoder_multimodal_joint_layers
+        )
+        self._trainer = CFGenAETrainer(self._encoder, self._decoder)  # type: ignore[arg-type]
 
     def train(
         self,
@@ -273,7 +281,7 @@ class CFGen:
             k: ValidationSampler(v) for k, v in self.validation_data.items()
         }
 
-        self._cfgen = self.trainer.train(
+        self.trainer.train(
             dataloader=self._dataloader,
             num_iterations=num_iterations,
             valid_freq=valid_freq,
@@ -366,7 +374,7 @@ class CFGen:
         return self._dataloader
 
     @property
-    def trainer(self) -> CellFlowTrainer | None:
+    def trainer(self) -> CFGenAETrainer | None:
         """The trainer used for training."""
         return self._trainer
 
@@ -383,13 +391,9 @@ class CFGen:
     @property
     def encoder(self) -> CFGenEncoder:
         """The encoder of the underlying CFGen Model"""
-        return self._cfgen.encoder
+        return self._encoder
     
     @property
     def decoder(self) -> CFGenDecoder:
         """The encoder of the underlying CFGen Model"""
-        return self._cfgen.decoder
-    
-    @property
-    def autoencoder(self) -> CFGenAE:
-        return self._cfgen
+        return self._decoder
