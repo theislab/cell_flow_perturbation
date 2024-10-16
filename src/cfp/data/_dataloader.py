@@ -50,6 +50,10 @@ class TrainSampler:
             )
 
             source_batch = self._data.cell_data[source_batch_idcs]
+            
+            source_batch_tgt_rep = None
+            if self._data.target_data is not None:
+                source_batch_tgt_rep = self._data.target_data[source_batch_idcs]
 
             target_dist_idx = jax.lax.switch(
                 source_dist_idx, self.conditional_samplings, rng_3
@@ -70,11 +74,14 @@ class TrainSampler:
                 return {"src_cell_data": source_batch, "tgt_cell_data": target_batch}
 
             condition_batch = self.get_embeddings(target_dist_idx)
-            return {
+            return_dict = {
                 "src_cell_data": source_batch,
                 "tgt_cell_data": target_batch,
                 "condition": condition_batch,
             }
+            if source_batch_tgt_rep is not None:
+                return_dict["src_cell_data_tgt_rep"] = source_batch_tgt_rep
+            return return_dict
 
         self.sample = _sample
 

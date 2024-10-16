@@ -59,7 +59,7 @@ class CFGenAETrainer:
         for val_key, vdl in val_data.items():
             batch = vdl.sample(rng)
             src = batch["src_cell_data"]
-            tgt_counts = batch["src_cell_data"]  # batch["tgt_counts"]
+            tgt_counts = batch["src_cell_data_tgt_rep"]
             valid_pred_data[val_key] = jax.tree.map(self.cfgen.predict, src, False)
             valid_true_data[val_key] = tgt_counts
 

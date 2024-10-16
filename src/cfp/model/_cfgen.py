@@ -79,7 +79,7 @@ class CFGen:
 
     def fwd_fn(self, rng: np.ndarray, batch: dict[str, ArrayLike], training: bool):
         src = batch["src_cell_data"]
-        tgt_counts = batch["src_cell_data"]  # batch["tgt_counts"]
+        tgt_counts = batch["src_cell_data_tgt_rep"]  # batch["tgt_counts"]
         self.encoder_state, self.decoder_state, loss = self.ae_fwd_fn(
             self.encoder_state,
             self.decoder_state,

@@ -81,6 +81,7 @@ class DataManager:
         adata: anndata.AnnData,
         sample_rep: str | dict[str, str],
         control_key: str,
+        target_rep: str | dict[str, str] | None = None,
         perturbation_covariates: dict[str, Sequence[str]] | None = None,
         perturbation_covariate_reps: dict[str, str] | None = None,
         sample_covariates: Sequence[str] | None = None,
@@ -90,8 +91,12 @@ class DataManager:
         null_value: float = 0.0,
     ):
         self._adata = adata
-        self._sample_rep = self._verify_sample_rep(sample_rep)
+        self._sample_rep = self._verify_rep(sample_rep)
         self._control_key = control_key
+        # self._target_rep is None by default (only use for counts)
+        self._target_rep = None 
+        if target_rep is not None: 
+            self._target_rep = self._verify_rep(target_rep) 
         self._perturbation_covariates = self._verify_perturbation_covariates(
             perturbation_covariates
         )
@@ -149,8 +154,10 @@ class DataManager:
         """
         cond_data = self._get_condition_data(adata)
         cell_data = self._get_cell_data(adata)
+        target_data = self._get_target_data(adata) # None otherwise self._target_rep is not None
         return TrainingData(
             cell_data=cell_data,
+            target_data=target_data,
             split_covariates_mask=cond_data.split_covariates_mask,
             split_idx_to_covariates=cond_data.split_idx_to_covariates,
             perturbation_covariates_mask=cond_data.perturbation_covariates_mask,
@@ -483,7 +490,7 @@ class DataManager:
             )
 
     @staticmethod
-    def _verify_sample_rep(sample_rep: str | dict[str, str]) -> str | dict[str, str]:
+    def _verify_rep(sample_rep: str | dict[str, str]) -> str | dict[str, str]:
         if not (isinstance(sample_rep, str) or isinstance(sample_rep, dict)):
             raise ValueError(
                 f"`sample_rep` should be of type `str` or `dict`, found {sample_rep} to be of type {type(sample_rep)}."
@@ -509,6 +516,23 @@ class DataManager:
                 )
             return jnp.asarray(adata.obsm[self._sample_rep])
         attr, key = next(iter(sample_rep.items()))  # type: ignore[union-attr]
+        return jnp.asarray(getattr(adata, attr)[key])
+    
+    def _get_target_data(
+        self,
+        adata: anndata.AnnData,
+        target_rep: str | None = None,
+    ) -> jax.Array | None:
+        target_rep = self._target_rep if target_rep is None else target_rep
+        if target_rep is None:
+            return None
+        if isinstance(self._target_rep, str):
+            if self._target_rep not in adata.obsm:
+                raise KeyError(
+                    f"Target representation '{self._target_rep}' not found in `adata.obsm`."
+                )
+            return jnp.asarray(adata.obsm[self._target_rep])
+        attr, key = next(iter(target_rep.items()))  # type: ignore[union-attr]
         return jnp.asarray(getattr(adata, attr)[key])
 
     def _verify_control_data(self, adata: anndata.AnnData | None) -> None:

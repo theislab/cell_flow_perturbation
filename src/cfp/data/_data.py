@@ -108,6 +108,7 @@ class TrainingData(BaseDataMixin):
     """
 
     cell_data: jax.Array  # (n_cells, n_features)
+    target_data: jax.Array | None # Optional: (n_cells, n_features)
     split_covariates_mask: (
         jax.Array
     )  # (n_cells,), which cell assigned to which source distribution
