@@ -70,6 +70,7 @@ class CFGenAETrainer:
         for k, v in logs.items():
             if k not in self.training_logs:
                 self.training_logs[k] = []
+            self.training_logs[k].append(v)
 
     def train(
         self,

@@ -63,7 +63,7 @@ def compute_counts_metrics(
 ) -> dict[str, float]:
     """Compute different metrics for count data"""
     metrics = {}
-    metrics["negbin_rec_loss"] = compute_negbin_rec_loss(x, y, theta)
+    metrics["negbin_rec_loss"] = compute_negbin_rec_loss(x, y)
     return metrics
 
 
