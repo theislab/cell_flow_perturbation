@@ -52,7 +52,7 @@ def compute_metrics(x: ArrayLike, y: ArrayLike) -> dict[str, float]:
 
 def compute_negbin_rec_loss(counts: ArrayLike, params: tuple[ArrayLike, ArrayLike]) -> float:
     """Compute the reconstruction loss for the negative binomial noise model"""
-    mean, theta = y
+    mean, theta = params
     px = NegativeBinomial(mean=mean, inverse_dispersion=jnp.exp(theta))
     loss = -px.log_prob(counts).sum(1).mean()
     return loss
