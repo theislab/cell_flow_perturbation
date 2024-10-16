@@ -13,7 +13,13 @@ from tqdm import tqdm
 
 from cfp._logging import logger
 from cfp._types import ArrayLike
-from cfp.data._data import ConditionData, PredictionData, ReturnData, TrainingData, ValidationData
+from cfp.data._data import (
+    ConditionData,
+    PredictionData,
+    ReturnData,
+    TrainingData,
+    ValidationData,
+)
 
 from ._utils import _flatten_list, _to_list
 

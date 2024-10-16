@@ -149,7 +149,9 @@ class ConditionalVelocityField(nn.Module):
             self.x_encoder = self.cfgen_encoder
             # self.x_encoder = CFGenEncoder(**self.cfgen_kwargs)
         else:
-            raise ValueError("The selected argument for `self.ae` is not supported, choose between ['mlp', 'cfgen']")
+            raise ValueError(
+                "The selected argument for `self.ae` is not supported, choose between ['mlp', 'cfgen']"
+            )
         ## initializing optional layer normalization
         self.layer_norm_x = (
             nn.LayerNorm() if self.layer_norm_before_concatenation else lambda x: x
@@ -170,7 +172,9 @@ class ConditionalVelocityField(nn.Module):
             self.decoder = self.cfgen_decoder
             # self.decoder = CGenDecoder(**self.cfgen_kwargs)
         else:
-            raise ValueError("The selected argument for `self.ae` is not supported, choose between ['mlp', 'cfgen']")
+            raise ValueError(
+                "The selected argument for `self.ae` is not supported, choose between ['mlp', 'cfgen']"
+            )
 
     def __call__(
         self,
@@ -202,7 +206,7 @@ class ConditionalVelocityField(nn.Module):
         else:
             cond = jnp.concatenate(list(cond.values()), axis=-1)
         if self.ae == "cfgen":
-            size_factor = jnp.sum(x, axis = 1, keepdims = True)
+            size_factor = jnp.sum(x, axis=1, keepdims=True)
         t = time_encoder.cyclical_time_encoder(t, n_freqs=self.time_freqs)
         t = self.time_encoder(t, training=train)
         if self.ae == "mlp":
@@ -224,9 +228,11 @@ class ConditionalVelocityField(nn.Module):
             out = self.decoder(concatenated, training=train)
             out = self.output_layer(out)
         elif self.ae == "cfgen":
-            out = self.decoder({"rna": concatenated}, {"rna": size_factor}, training=train)
+            out = self.decoder(
+                {"rna": concatenated}, {"rna": size_factor}, training=train
+            )
             out = out["rna"]
-        return out 
+        return out
 
     def get_condition_embedding(self, condition: dict[str, jnp.ndarray]) -> jnp.ndarray:
         """Get the embedding of the condition.

@@ -8,7 +8,13 @@ import jax.tree_util as jtu
 import numpy as np
 from numpy.typing import ArrayLike
 
-from cfp.metrics._metrics import compute_e_distance, compute_r_squared, compute_scalar_mmd, compute_sinkhorn_div, compute_negbin_rec_loss
+from cfp.metrics._metrics import (
+    compute_e_distance,
+    compute_r_squared,
+    compute_scalar_mmd,
+    compute_sinkhorn_div,
+    compute_negbin_rec_loss,
+)
 
 __all__ = [
     "BaseCallback",
@@ -27,7 +33,7 @@ metric_to_func: dict[str, Callable[[ArrayLike, ArrayLike], float | ArrayLike]] =
     "mmd": compute_scalar_mmd,
     "sinkhorn_div": compute_sinkhorn_div,
     "e_distance": compute_e_distance,
-    "negbin_rec_loss": compute_negbin_rec_loss
+    "negbin_rec_loss": compute_negbin_rec_loss,
 }
 
 agg_fn_to_func: dict[str, Callable[[ArrayLike], float | ArrayLike]] = {
@@ -154,7 +160,9 @@ class Metrics(ComputationCallback):
 
     def __init__(
         self,
-        metrics: list[Literal["r_squared", "mmd", "sinkhorn_div", "e_distance", "negbin_rec_loss"]],
+        metrics: list[
+            Literal["r_squared", "mmd", "sinkhorn_div", "e_distance", "negbin_rec_loss"]
+        ],
         metric_aggregations: list[Literal["mean", "median"]] = None,
     ):
         self.metrics = metrics
@@ -290,7 +298,9 @@ class VAEDecodedMetrics(Metrics):
         self,
         vae: Callable[[ArrayLike], ArrayLike],
         adata: ad.AnnData,
-        metrics: list[Literal["r_squared", "mmd", "sinkhorn_div", "e_distance", "negbin_rec_loss"]],
+        metrics: list[
+            Literal["r_squared", "mmd", "sinkhorn_div", "e_distance", "negbin_rec_loss"]
+        ],
         metric_aggregations: list[Literal["mean", "median"]] = None,
         log_prefix: str = "vae_decoded_",
     ):
@@ -332,9 +342,10 @@ class VAEDecodedMetrics(Metrics):
         return metrics
 
     def _create_anndata(self, data: ArrayLike) -> ad.AnnData:
-    
+
         adata = ad.AnnData(
-            X=np.empty((len(data), self._adata_n_vars)), obs=self._adata_obs[:len(data)]
+            X=np.empty((len(data), self._adata_n_vars)),
+            obs=self._adata_obs[: len(data)],
         )
         adata.obsm["X_scVI"] = data  # TODO: make package constant
         return adata

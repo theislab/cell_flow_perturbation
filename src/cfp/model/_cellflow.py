@@ -185,17 +185,17 @@ class CellFlow:
         self._data_dim = self.train_data.cell_data.shape[-1]
 
     def prepare_cfgen_validation_data(
-            self,
-            adata: ad.AnnData,
-            sample_rep: str | dict[str, str],
-            control_key: str,
-            perturbation_covariates: dict[str, Sequence[str]],
-            perturbation_covariate_reps: dict[str, str] | None = None,
-            sample_covariates: Sequence[str] | None = None,
-            sample_covariate_reps: dict[str, str] | None = None,
-            split_covariates: Sequence[str] | None = None,
-            max_combination_length: int | None = None,
-            null_value: float = 0.0,
+        self,
+        adata: ad.AnnData,
+        sample_rep: str | dict[str, str],
+        control_key: str,
+        perturbation_covariates: dict[str, Sequence[str]],
+        perturbation_covariate_reps: dict[str, str] | None = None,
+        sample_covariates: Sequence[str] | None = None,
+        sample_covariate_reps: dict[str, str] | None = None,
+        split_covariates: Sequence[str] | None = None,
+        max_combination_length: int | None = None,
+        null_value: float = 0.0,
     ) -> None:
         dm = DataManager(
             self.adata,
@@ -448,12 +448,12 @@ class CellFlow:
             cfgen_encoder = CFGenEncoder(**cfgen_kwargs)
             cfgen_decoder = CFGenDecoder(**cfgen_kwargs)
             self.cfgen = CFGen(
-                cfgen_encoder, 
-                cfgen_decoder, 
-                {"rng": jax.random.PRNGKey(seed), "optimizer": cfgen_optimizer}, 
-                {"rng": jax.random.PRNGKey(seed), "optimizer": cfgen_optimizer}
+                cfgen_encoder,
+                cfgen_decoder,
+                {"rng": jax.random.PRNGKey(seed), "optimizer": cfgen_optimizer},
+                {"rng": jax.random.PRNGKey(seed), "optimizer": cfgen_optimizer},
             )
-            
+
         self.vf = ConditionalVelocityField(
             output_dim=self._data_dim,
             max_combination_length=self.train_data.max_combination_length,
@@ -478,7 +478,7 @@ class CellFlow:
             linear_projection_before_concatenation=linear_projection_before_concatenation,
             ae=ae,
             cfgen_encoder=cfgen_encoder,
-            cfgen_decoder=cfgen_decoder
+            cfgen_decoder=cfgen_decoder,
         )
 
         flow, noise = next(iter(flow.items()))
@@ -569,8 +569,12 @@ class CellFlow:
                 "Model not initialized. Please call `prepare_model` first."
             )
 
-        self._dataloader = TrainSampler(data=self.train_data, batch_size=train_batch_size)
-        validation_loaders = TrainSampler(self.cfgen_val_data, batch_size=val_batch_size)
+        self._dataloader = TrainSampler(
+            data=self.train_data, batch_size=train_batch_size
+        )
+        validation_loaders = TrainSampler(
+            self.cfgen_val_data, batch_size=val_batch_size
+        )
 
         self.cfgen_ae_trainer.train(
             dataloader=self._dataloader,

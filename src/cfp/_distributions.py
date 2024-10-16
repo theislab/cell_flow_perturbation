@@ -4,6 +4,7 @@ import jax.numpy as jnp
 
 from cfp._types import ArrayLike
 
+
 def _multivariate_normal(
     rng: jax.Array,
     shape: tuple[int, ...],

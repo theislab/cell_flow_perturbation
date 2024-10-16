@@ -13,9 +13,10 @@ from cfp.external import NegativeBinomial
 from cfp.data._dataloader import TrainSampler, ValidationSampler
 from cfp.training._callbacks import BaseCallback, CallbackRunner
 
+
 class CFGenAETrainer:
     """Trainer for the CFGen AutoEncoder with Negative Binomial noise model
-    
+
     Parameters
     ----------
         dataloader
@@ -30,6 +31,7 @@ class CFGenAETrainer:
         None
 
     """
+
     def __init__(
         self,
         cfgen: CFGen,
@@ -57,12 +59,12 @@ class CFGenAETrainer:
         for val_key, vdl in val_data.items():
             batch = vdl.sample(rng)
             src = batch["src_cell_data"]
-            tgt_counts = batch["src_cell_data"] # batch["tgt_counts"]
+            tgt_counts = batch["src_cell_data"]  # batch["tgt_counts"]
             valid_pred_data[val_key] = jax.tree.map(self.cfgen.predict, src, False)
             valid_true_data[val_key] = tgt_counts
 
         return valid_true_data, valid_pred_data
-    
+
     def _update_logs(self, logs: dict[str, Any]) -> None:
         """Update training logs."""
         for k, v in logs.items():
@@ -106,7 +108,7 @@ class CFGenAETrainer:
             callbacks=callbacks,
         )
         crun.on_train_begin()
-            
+
         pbar = tqdm(range(num_iterations))
         for it in pbar:
             rng, rng_step_fn = jax.random.split(rng, 2)
