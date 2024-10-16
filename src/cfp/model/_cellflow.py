@@ -184,6 +184,33 @@ class CellFlow:
 
         self._data_dim = self.train_data.cell_data.shape[-1]
 
+    def prepare_cfgen_validation_data(
+            self,
+            adata: ad.AnnData,
+            sample_rep: str | dict[str, str],
+            control_key: str,
+            perturbation_covariates: dict[str, Sequence[str]],
+            perturbation_covariate_reps: dict[str, str] | None = None,
+            sample_covariates: Sequence[str] | None = None,
+            sample_covariate_reps: dict[str, str] | None = None,
+            split_covariates: Sequence[str] | None = None,
+            max_combination_length: int | None = None,
+            null_value: float = 0.0,
+    ) -> None:
+        dm = DataManager(
+            self.adata,
+            sample_rep=sample_rep,
+            control_key=control_key,
+            perturbation_covariates=perturbation_covariates,
+            perturbation_covariate_reps=perturbation_covariate_reps,
+            sample_covariates=sample_covariates,
+            sample_covariate_reps=sample_covariate_reps,
+            split_covariates=split_covariates,
+            max_combination_length=max_combination_length,
+            null_value=null_value,
+        )
+        self.cfgen_val_data = dm.get_train_data(adata)
+
     def prepare_validation_data(
         self,
         adata: ad.AnnData,
@@ -497,7 +524,8 @@ class CellFlow:
     def pretrain_cfgen_ae(
         self,
         num_iterations: int,
-        batch_size: int = 1024,
+        train_batch_size: int = 1024,
+        val_batch_size: int = 1024,
         valid_freq: int = 1000,
         callbacks: Sequence[BaseCallback] = [],
         monitor_metrics: Sequence[str] = [],
@@ -541,16 +569,14 @@ class CellFlow:
                 "Model not initialized. Please call `prepare_model` first."
             )
 
-        self._dataloader = TrainSampler(data=self.train_data, batch_size=batch_size)
-        validation_loaders = {
-            k: ValidationSampler(v) for k, v in self.validation_data.items()
-        }
+        self._dataloader = TrainSampler(data=self.train_data, batch_size=train_batch_size)
+        validation_loaders = TrainSampler(self.cfgen_val_data, batch_size=val_batch_size)
 
         self.cfgen_ae_trainer.train(
             dataloader=self._dataloader,
             num_iterations=num_iterations,
             valid_freq=valid_freq,
-            valid_loaders=validation_loaders,
+            valid_loaders={"cgfen": validation_loaders},
             callbacks=callbacks,
             monitor_metrics=monitor_metrics,
         )

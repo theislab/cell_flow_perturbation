@@ -49,13 +49,14 @@ def compute_metrics(x: ArrayLike, y: ArrayLike) -> dict[str, float]:
     metrics["mmd"] = compute_scalar_mmd(x, y)
     return metrics
 
-def compute_negbin_rec_loss(x: ArrayLike, y: ArrayLike, theta: ArrayLike | float) -> float:
+def compute_negbin_rec_loss(x: ArrayLike, y: tuple[ArrayLike, ArrayLike]) -> float:
     """Compute the reconstruction loss for the negative binomial noise model"""
-    px = NegativeBinomial(mu=x, theta=jnp.exp(theta))
-    loss = px.log_prob(y).sum(1).mean()
+    x_hat, theta = y
+    px = NegativeBinomial(mean=x_hat, inverse_dispersion=jnp.exp(theta))
+    loss = -px.log_prob(x).sum(1).mean()
     return loss
     
-def compute_counts_metrics(x: ArrayLike, y: ArrayLike, theta: ArrayLike | float) -> dict[str, float]:
+def compute_counts_metrics(x: ArrayLike, y: tuple[ArrayLike, ArrayLike]) -> dict[str, float]:
     """Compute different metrics for count data"""
     metrics = {}
     metrics["negbin_rec_loss"] = compute_negbin_rec_loss(x, y, theta)

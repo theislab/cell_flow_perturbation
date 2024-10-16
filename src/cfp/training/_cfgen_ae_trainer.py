@@ -50,15 +50,16 @@ class CFGenAETrainer:
     ]:
         """Compute predictions for validation data."""
         # TODO: Sample fixed number of conditions to validate on
+        rng = jax.random.PRNGKey(0)
 
         valid_pred_data: dict[str, dict[str, ArrayLike]] = {}
         valid_true_data: dict[str, dict[str, ArrayLike]] = {}
         for val_key, vdl in val_data.items():
-            batch = vdl.sample(mode=mode)
-            src = batch["source"]
-            true_tgt = batch["source"]#["counts"]
+            batch = vdl.sample(rng)
+            src = batch["src_cell_data"]
+            tgt_counts = batch["src_cell_data"] # batch["tgt_counts"]
             valid_pred_data[val_key] = jax.tree.map(self.cfgen.predict, src, False)
-            valid_true_data[val_key] = true_tgt
+            valid_true_data[val_key] = tgt_counts
 
         return valid_true_data, valid_pred_data
     

@@ -46,7 +46,6 @@ class CFGen:
                 ) -> float:
                 size_factor = jnp.sum(source, axis = 1, keepdims = True)
                 z = encoder_state.apply_fn({"params": encoder_params}, {"rna": source})
-                #x_hat = decoder_state.apply_fn({"params": decoder_params}, {"rna": z}, {"rna": size_factor})
                 x_hat = decoder_state.apply_fn({"params": decoder_params}, z, {"rna": size_factor})
                 px = NegativeBinomial(mean=x_hat["rna"], inverse_dispersion=jnp.exp(decoder_params["theta"]))
                 loss = -px.log_prob(tgt_counts).sum(1).mean()
@@ -70,9 +69,12 @@ class CFGen:
         )
         return loss
     
-    def predict(self, src: dict[str, ArrayLike], training: bool):
+    def predict(self, src: ArrayLike, training: bool):
         """"""
-        raise NotImplementedError
+        size_factor = jnp.sum(src, axis = 1, keepdims = True)
+        z = self.encoder.apply({"params":self.encoder_state.params}, {"rna": src}, False)
+        x_hat = self.decoder.apply({"params":self.decoder_state.params}, z, {"rna": size_factor}, False)
+        return x_hat["rna"], self.decoder_state.params["theta"]
 
     @property
     def is_trained(self) -> bool:
