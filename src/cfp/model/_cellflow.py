@@ -68,7 +68,6 @@ class CellFlow:
         sample_rep: str,
         control_key: str,
         perturbation_covariates: dict[str, Sequence[str]],
-        target_rep: str | None = None,
         perturbation_covariate_reps: dict[str, str] | None = None,
         sample_covariates: Sequence[str] | None = None,
         sample_covariate_reps: dict[str, str] | None = None,
@@ -171,7 +170,6 @@ class CellFlow:
             self.adata,
             sample_rep=sample_rep,
             control_key=control_key,
-            target_rep=target_rep,
             perturbation_covariates=perturbation_covariates,
             perturbation_covariate_reps=perturbation_covariate_reps,
             sample_covariates=sample_covariates,
@@ -192,7 +190,6 @@ class CellFlow:
         sample_rep: str | dict[str, str],
         control_key: str,
         perturbation_covariates: dict[str, Sequence[str]],
-        target_rep: str | dict[str, str] | None = None,
         perturbation_covariate_reps: dict[str, str] | None = None,
         sample_covariates: Sequence[str] | None = None,
         sample_covariate_reps: dict[str, str] | None = None,
@@ -204,7 +201,6 @@ class CellFlow:
             adata,
             sample_rep=sample_rep,
             control_key=control_key,
-            target_rep=target_rep,
             perturbation_covariates=perturbation_covariates,
             perturbation_covariate_reps=perturbation_covariate_reps,
             sample_covariates=sample_covariates,
@@ -289,6 +285,7 @@ class CellFlow:
         seed=0,
         ae: Literal["mlp", "cfgen"] = "mlp",
         cfgen_kwargs: dict[str, Any] | None = None,
+        normalization_type: Literal["proportions", "log_gexp", "log_gexp_scaled"] = "log_gexp_scaled",
     ) -> None:
         """Prepare the model for training.
 
@@ -456,6 +453,7 @@ class CellFlow:
                 cfgen_decoder,
                 {"rng": jax.random.PRNGKey(seed), "optimizer": cfgen_optimizer},
                 {"rng": jax.random.PRNGKey(seed), "optimizer": cfgen_optimizer},
+                normalization_type = normalization_type
             )
 
         self.vf = ConditionalVelocityField(
@@ -523,7 +521,7 @@ class CellFlow:
             )
         self._trainer = CellFlowTrainer(solver=self.solver)  # type: ignore[arg-type]
         if ae == "cfgen":
-            self._cfgen_ae_trainer = CFGenAETrainer(self.cfgen)
+            self._cfgen_ae_trainer = CFGenAETrainer(self.cfgen, normalization_type=normalization_type)
 
     def pretrain_cfgen_ae(
         self,

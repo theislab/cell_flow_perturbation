@@ -50,21 +50,12 @@ def compute_metrics(x: ArrayLike, y: ArrayLike) -> dict[str, float]:
     return metrics
 
 
-def compute_negbin_rec_loss(x: ArrayLike, y: tuple[ArrayLike, ArrayLike]) -> float:
+def compute_negbin_rec_loss(counts: ArrayLike, params: tuple[ArrayLike, ArrayLike]) -> float:
     """Compute the reconstruction loss for the negative binomial noise model"""
-    x_hat, theta = y
-    px = NegativeBinomial(mean=x_hat, inverse_dispersion=jnp.exp(theta))
-    loss = -px.log_prob(x).sum(1).mean()
+    mean, theta = y
+    px = NegativeBinomial(mean=mean, inverse_dispersion=jnp.exp(theta))
+    loss = -px.log_prob(counts).sum(1).mean()
     return loss
-
-
-def compute_counts_metrics(
-    x: ArrayLike, y: tuple[ArrayLike, ArrayLike]
-) -> dict[str, float]:
-    """Compute different metrics for count data"""
-    metrics = {}
-    metrics["negbin_rec_loss"] = compute_negbin_rec_loss(x, y)
-    return metrics
 
 
 def compute_mean_metrics(metrics: dict[str, dict[str, float]], prefix: str = ""):
