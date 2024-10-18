@@ -285,7 +285,9 @@ class CellFlow:
         seed=0,
         ae: Literal["mlp", "cfgen"] = "mlp",
         cfgen_kwargs: dict[str, Any] | None = None,
-        normalization_type: Literal["proportions", "log_gexp", "log_gexp_scaled"] = "log_gexp_scaled",
+        normalization_type: Literal[
+            "none", "proportions", "log_gexp", "log_gexp_scaled"
+        ] = "none",
     ) -> None:
         """Prepare the model for training.
 
@@ -451,9 +453,17 @@ class CellFlow:
             self.cfgen = CFGen(
                 cfgen_encoder,
                 cfgen_decoder,
-                {"rng": jax.random.PRNGKey(seed), "optimizer": cfgen_optimizer},
-                {"rng": jax.random.PRNGKey(seed), "optimizer": cfgen_optimizer},
-                normalization_type = normalization_type
+                {
+                    "rng": jax.random.PRNGKey(seed),
+                    "optimizer": cfgen_optimizer,
+                    "training": False,
+                },
+                {
+                    "rng": jax.random.PRNGKey(seed),
+                    "optimizer": cfgen_optimizer,
+                    "training": False,
+                },
+                normalization_type=normalization_type,
             )
 
         self.vf = ConditionalVelocityField(
@@ -521,7 +531,9 @@ class CellFlow:
             )
         self._trainer = CellFlowTrainer(solver=self.solver)  # type: ignore[arg-type]
         if ae == "cfgen":
-            self._cfgen_ae_trainer = CFGenAETrainer(self.cfgen, normalization_type=normalization_type)
+            self._cfgen_ae_trainer = CFGenAETrainer(
+                self.cfgen, normalization_type=normalization_type
+            )
 
     def pretrain_cfgen_ae(
         self,

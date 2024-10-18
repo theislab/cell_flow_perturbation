@@ -50,6 +50,7 @@ class MLPBlock(BaseModule):
     dims: Sequence[int] = (1024, 1024, 1024)
     dropout_rate: float = 0.0
     act_last_layer: bool = True
+    batch_norm: bool = False
     act_fn: Callable[[jnp.ndarray], jnp.ndarray] = nn.silu
 
     @nn.compact
@@ -72,7 +73,10 @@ class MLPBlock(BaseModule):
             return x
         z = x
         for i in range(len(self.dims) - 1):
-            z = self.act_fn(nn.Dense(self.dims[i])(z))
+            z = nn.Dense(self.dims[i])(z)
+            if self.batch_norm:
+                z = nn.BatchNorm(use_running_average=not training)(z)
+            z = self.act_fn(z)
             z = nn.Dropout(self.dropout_rate)(z, deterministic=not training)
         z = nn.Dense(self.dims[-1])(z)
         z = self.act_fn(z) if self.act_last_layer else z

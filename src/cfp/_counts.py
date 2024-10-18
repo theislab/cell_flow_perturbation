@@ -3,11 +3,12 @@ import jax.numpy as jnp
 from typing import Literal
 from cfp._types import ArrayLike
 
+
 def normalize_expression(
-        X: ArrayLike, 
-        size_factor: ArrayLike, 
-        normalization_type: Literal["proportions", "log_gexp", "log_gexp_scaled"]
-    ) -> ArrayLike:
+    X: ArrayLike,
+    size_factor: ArrayLike,
+    normalization_type: Literal["none", "proportions", "log_gexp", "log_gexp_scaled"],
+) -> ArrayLike:
     """Normalize gene expression data based on the specified encoder type.
 
     Args:
@@ -26,12 +27,16 @@ def normalize_expression(
     Raises:
         NotImplementedError: If the encoder type is not recognized.
     """
-    if normalization_type == "proportions":
+    if normalization_type == "none":
+        X = X
+    elif normalization_type == "proportions":
         X = X / size_factor
     elif normalization_type == "log_gexp":
         X = jnp.log1p(X)
     elif normalization_type == "log_gexp_scaled":
         X = jnp.log1p(X / size_factor)
     else:
-        raise NotImplementedError(f"Encoder type '{normalization_type}' is not implemented.")
+        raise NotImplementedError(
+            f"Encoder type '{normalization_type}' is not implemented."
+        )
     return X

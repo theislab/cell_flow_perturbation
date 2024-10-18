@@ -8,9 +8,10 @@ import jax.numpy as jnp
 import optax
 from flax import linen as nn
 from flax.linen import initializers
-from flax.training import train_state
+from flax.training.train_state import TrainState
 from flax.typing import FrozenDict
 
+from cfp._batch_norm import BNTrainState
 from cfp._constants import GENOT_CELL_KEY
 from cfp._types import ArrayLike, Layers_separate_input_t, Layers_t
 from cfp._distributions import _multivariate_normal
@@ -46,6 +47,7 @@ class CFGenEncoder(BaseModule):
     encoder_kwargs: dict[str, dict[str, Any]]
     covariate_specific_theta: bool
     is_binarized: bool
+    n_cat: int | None
     encoder_multimodal_joint_layers: dict[str, Any] | None
 
     """Implements the Encoder block of the CFGen model"""
@@ -102,7 +104,8 @@ class CFGenEncoder(BaseModule):
         rng: jax.Array,
         optimizer: optax.OptState,
         input_dim: int,
-    ) -> train_state.TrainState:
+        training: bool = False,
+    ) -> BNTrainState | TrainState:
         """Create the training state.
 
         Parameters
@@ -119,10 +122,18 @@ class CFGenEncoder(BaseModule):
             The training state.
         """
         x = jnp.ones((1, input_dim))
-        params = self.init(rng, x, training=False)["params"]
-        return train_state.TrainState.create(
-            apply_fn=self.apply, params=params, tx=optimizer
-        )
+        variables = self.init(rng, x, training=training)
+        params = variables["params"]
+        if self.encoder_kwargs["rna"]["batch_norm"]:
+            batch_stats = variables["batch_stats"]
+            return BNTrainState.create(
+                apply_fn=self.apply,
+                params=params,
+                tx=optimizer,
+                batch_stats=batch_stats,
+            )
+        else:
+            return TrainState.create(apply_fn=self.apply, params=params, tx=optimizer)
 
 
 class CFGenDecoder(BaseModule):
@@ -149,6 +160,7 @@ class CFGenDecoder(BaseModule):
     encoder_kwargs: dict[str, dict[str, Any]]
     covariate_specific_theta: bool
     is_binarized: bool
+    n_cat: int | None
     encoder_multimodal_joint_layers: dict[str, Any] | None
 
     """Implements the Encoder block of the CFGen model"""
@@ -179,7 +191,7 @@ class CFGenDecoder(BaseModule):
         if not self.covariate_specific_theta:
             shape = 1
         else:
-            shape = n_cat
+            shape = self.n_cat
         self.param(
             "theta",
             _multivariate_normal,
@@ -220,7 +232,8 @@ class CFGenDecoder(BaseModule):
         rng: jax.Array,
         optimizer: optax.OptState,
         input_dim: int,
-    ) -> train_state.TrainState:
+        training: bool = False,
+    ) -> BNTrainState | TrainState:
         """Create the training state.
 
         Parameters
@@ -238,7 +251,15 @@ class CFGenDecoder(BaseModule):
         """
         x = jnp.ones((1, input_dim))
         size_factor = jnp.sum(x, axis=1, keepdims=True)
-        params = self.init(rng, x, size_factor, training=False)["params"]
-        return train_state.TrainState.create(
-            apply_fn=self.apply, params=params, tx=optimizer
-        )
+        variables = self.init(rng, x, size_factor, training=training)
+        params = variables["params"]
+        if self.encoder_kwargs["rna"]["batch_norm"]:
+            batch_stats = variables["batch_stats"]
+            return BNTrainState.create(
+                apply_fn=self.apply,
+                params=params,
+                tx=optimizer,
+                batch_stats=batch_stats,
+            )
+        else:
+            return TrainState.create(apply_fn=self.apply, params=params, tx=optimizer)

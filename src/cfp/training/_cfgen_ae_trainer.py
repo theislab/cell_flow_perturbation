@@ -13,7 +13,7 @@ from cfp.external import NegativeBinomial
 from cfp.data._dataloader import TrainSampler, ValidationSampler
 from cfp.training._callbacks import BaseCallback, CallbackRunner
 
-from cfp._counts  import normalize_expression
+from cfp._counts import normalize_expression
 
 
 class CFGenAETrainer:
@@ -37,7 +37,9 @@ class CFGenAETrainer:
     def __init__(
         self,
         cfgen: CFGen,
-        normalization_type: Literal["proportions", "log_gexp", "log_gexp_scaled"] = "log_gexp_scaled",
+        normalization_type: Literal[
+            "none", "proportions", "log_gexp", "log_gexp_scaled"
+        ] = "none",
         seed: int = 0,
     ):
         self.cfgen = cfgen
@@ -62,7 +64,7 @@ class CFGenAETrainer:
         valid_true_data: dict[str, dict[str, ArrayLike]] = {}
         for val_key, vdl in val_data.items():
             batch = vdl.sample(rng)
-            counts = batch["src_cell_data"]        
+            counts = batch["src_cell_data"]
             valid_pred_data[val_key] = jax.tree.map(self.cfgen.predict, counts, False)
             valid_true_data[val_key] = counts
 
