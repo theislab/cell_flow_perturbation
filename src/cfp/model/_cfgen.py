@@ -58,31 +58,39 @@ class CFGen:
                 normalized_counts = normalize_expression(
                     counts, size_factor, self.normalization_type
                 )
-                if not self.encoder.encoder_kwargs["rna"]["batch_norm"]:
-                    z = encoder_state.apply_fn(
-                        {"params": encoder_params}, {"rna": normalized_counts}
-                    )
-                    x_hat = decoder_state.apply_fn(
-                        {"params": decoder_params}, z, {"rna": size_factor}
-                    )
+                ## defining the parameter dictionaries for encoder and decoder blocks
+                ## we need to modify it later in case we are using batch normalization
+                encoder_params_dict = {"params": encoder_params}
+                decoder_params_dict = {"params": decoder_params}
+                ## setting the default value for the `mutable` argument of `apply_fn` 
+                mutable_enc = False
+                mutable_dec = False
+                ## updating the encoder and decoder parameters in case of batch normalization
+                if self.encoder.encoder_kwargs["rna"]["batch_norm"]:
+                    encoder_params_dict["batch_stats"] = encoder_state.batch_stats
+                    mutable_enc = ["batch_stats"]
+                if self.decoder.encoder_kwargs["rna"]["batch_norm"]:
+                    decoder_params_dict["batch_stats"] = decoder_state.batch_stats
+                    mutable_dec = ["batch_stats"]
+                ## forward pass on the encoder
+                ## in case of batch normalization retrieving the update of the stats 
+                encoder_out = encoder_state.apply_fn(
+                    encoder_params_dict, {"rna": normalized_counts}, training = True, mutable = mutable_enc
+                )
+                if self.encoder.encoder_kwargs["rna"]["batch_norm"]:
+                    z, enc_updates = encoder_out
                 else:
-                    z, enc_updates = encoder_state.apply_fn(
-                        {
-                            "params": encoder_params,
-                            "batch_stats": encoder_state.batch_stats,
-                        },
-                        {"rna": normalized_counts},
-                        mutable=["batch_stats"],
-                    )
-                    x_hat, dec_updates = decoder_state.apply_fn(
-                        {
-                            "params": decoder_params,
-                            "batch_stats": decoder_state.batch_stats,
-                        },
-                        z,
-                        {"rna": size_factor},
-                        mutable=["batch_stats"],
-                    )
+                    z = encoder_out
+                ## forward pass on the decoder
+                ## in case of batch normalization retrieving the update of the stats
+                decoder_out = decoder_state.apply_fn(
+                    decoder_params_dict, z, {"rna": size_factor}, training = True, mutable = mutable_dec
+                )
+                if self.decoder.encoder_kwargs["rna"]["batch_norm"]:
+                    x_hat, dec_updates = decoder_out
+                else:
+                    x_hat = decoder_out
+                ## computing reconstruction loss
                 px = NegativeBinomial(
                     mean=x_hat["rna"],
                     inverse_dispersion=jnp.exp(decoder_params["theta"]),
@@ -139,33 +147,38 @@ class CFGen:
         normalized_counts = normalize_expression(
             counts, size_factor, self.normalization_type
         )
-        if not self.encoder.encoder_kwargs["rna"]["batch_norm"]:
-            z = self.encoder.apply(
-                {"params": self.encoder_state.params},
-                {"rna": normalized_counts},
-                training,
-            )
-            x_hat = self.decoder.apply(
-                {"params": self.decoder_state.params}, z, {"rna": size_factor}, training
-            )
+        ## defining the parameter dictionaries for encoder and decoder blocks
+        ## we need to modify it later in case we are using batch normalization
+        encoder_params_dict = {"params": self.encoder_state.params}
+        decoder_params_dict = {"params": self.decoder_state.params}
+        ## setting the default value for the `mutable` argument of `apply_fn` 
+        mutable_enc = False
+        mutable_dec = False
+        ## updating the encoder and decoder parameters in case of batch normalization
+        if self.encoder.encoder_kwargs["rna"]["batch_norm"]:
+            encoder_params_dict["batch_stats"] = self.encoder_state.batch_stats
+            mutable_enc = ["batch_stats"]
+        if self.decoder.encoder_kwargs["rna"]["batch_norm"]:
+            decoder_params_dict["batch_stats"] = self.decoder_state.batch_stats
+            mutable_dec = ["batch_stats"]
+        ## forward pass on the encoder
+        ## in case of batch normalization retrieving the update of the stats 
+        encoder_out = self.encoder_state.apply_fn(
+            encoder_params_dict, {"rna": normalized_counts}, training = training, mutable = mutable_enc
+        )
+        if self.encoder.encoder_kwargs["rna"]["batch_norm"]:
+            z, enc_updates = encoder_out
         else:
-            z = self.encoder.apply(
-                {
-                    "params": self.encoder_state.params,
-                    "batch_stats": self.encoder_state.batch_stats,
-                },
-                {"rna": normalized_counts},
-                training,
-            )
-            x_hat = self.decoder.apply(
-                {
-                    "params": self.decoder_state.params,
-                    "batch_stats": self.decoder_state.batch_stats,
-                },
-                z,
-                {"rna": size_factor},
-                training,
-            )
+            z = encoder_out
+        ## forward pass on the decoder
+        ## in case of batch normalization retrieving the update of the stats
+        decoder_out = self.decoder_state.apply_fn(
+            decoder_params_dict, z, {"rna": size_factor}, training = training, mutable = mutable_dec
+        )
+        if self.decoder.encoder_kwargs["rna"]["batch_norm"]:
+            x_hat, dec_updates = decoder_out
+        else:
+            x_hat = decoder_out
         return x_hat["rna"], self.decoder_state.params["theta"]
 
     @property
