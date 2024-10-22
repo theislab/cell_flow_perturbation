@@ -118,24 +118,49 @@ class GENOT:
                     condition[GENOT_CELL_KEY] = source
                 else:
                     condition = {GENOT_CELL_KEY: source}
+                # setting up for optional use of batch normalization
+                mutable = False
+                state_dict = {"params": params}
+                if hasattr(vf_state, "batch_stats"):
+                    state_dict["batch_stats"] = vf_state.batch_stats
+                    mutable = ["batch_stats"]
 
-                v_t = vf_state.apply_fn(
-                    {"params": params},
+                vf_step = vf_state.apply_fn(
+                    state_dict,
                     time,
                     x_t,
                     condition,
                     rngs={"dropout": rng_dropout},
+                    train=True,
+                    mutable=mutable,
                 )
-                u_t = self.flow.compute_ut(time, latent, target)
+                u_t = self.flow.compute_ut(time, source, target)
+                # parsing output of fwd pass on vf
+                if hasattr(vf_state, "batch_stats"):
+                    v_t, vf_updates = vf_step
+                    return jnp.mean((v_t - u_t) ** 2), vf_updates
+                else:
+                    v_t = vf_step
+                    return jnp.mean((v_t - u_t) ** 2)
 
-                return jnp.mean((v_t - u_t) ** 2)
-
-            grad_fn = jax.value_and_grad(loss_fn)
-            loss, grads = grad_fn(
+            grad_fn = jax.value_and_grad(
+                loss_fn, has_aux=hasattr(vf_state, "batch_stats")
+            )
+            loss_step, grads = grad_fn(
                 vf_state.params, time, source, target, latent, conditions, rng
             )
 
-            return loss, vf_state.apply_gradients(grads=grads)
+            if hasattr(vf_state, "batch_stats"):
+                loss, vf_updates = loss_step
+                return (
+                    vf_state.apply_gradients(
+                        grads=grads, batch_stats=vf_updates["batch_stats"]
+                    ),
+                    loss,
+                )
+            else:
+                loss = loss_step
+                return vf_state.apply_gradients(grads=grads), loss
 
         return vf_step_fn
 
@@ -199,7 +224,7 @@ class GENOT:
         )
 
         src, tgt = src[src_ixs], tgt[tgt_ixs]
-        loss, self.vf_state = self.vf_step_fn(
+        self.vf_state, loss = self.vf_step_fn(
             rng_step_fn, self.vf_state, time, src, tgt, latent, condition
         )
         return loss
@@ -264,8 +289,10 @@ class GENOT:
         def vf(
             t: jnp.ndarray, x: jnp.ndarray, cond: dict[str, jnp.ndarray] | None
         ) -> jnp.ndarray:
-            params = self.vf_state.params
-            return self.vf_state.apply_fn({"params": params}, t, x, cond, train=False)
+            state_dict = {"params": self.vf_state.params}
+            if hasattr(self.vf_state, "batch_stats"):
+                state_dict["batch_stats"] = self.vf_state.batch_stats
+            return self.vf_state.apply_fn(state_dict, t, x, cond, train=False)
 
         def solve_ode(
             x: jnp.ndarray, condition: dict[str, jnp.ndarray], cell_data: jnp.ndarray

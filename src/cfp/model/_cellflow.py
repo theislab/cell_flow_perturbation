@@ -229,10 +229,13 @@ class CellFlow:
         pooling_kwargs: dict[str, Any] = types.MappingProxyType({}),
         time_encoder_dims: Sequence[int] = (1024, 1024, 1024),
         time_encoder_dropout: float = 0.0,
+        time_encoder_batchnorm: bool = False,
         hidden_dims: Sequence[int] = (1024, 1024, 1024),
         hidden_dropout: float = 0.0,
+        hidden_batchnorm: bool = False,
         decoder_dims: Sequence[int] = (1024, 1024, 1024),
         decoder_dropout: float = 0.0,
+        decoder_batchnorm: bool = False,
         layers_before_pool: Layers_separate_input_t | Layers_t = dc_field(
             default_factory=lambda: []
         ),
