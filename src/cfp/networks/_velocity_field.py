@@ -9,6 +9,7 @@ from flax import linen as nn
 from flax.training import train_state
 from ott.neural.networks.layers import time_encoder
 
+from cfp._batchnorm import BNTrainState
 from cfp._constants import GENOT_CELL_KEY
 from cfp._logging import logger
 from cfp._types import Layers_separate_input_t, Layers_t
@@ -94,10 +95,13 @@ class ConditionalVelocityField(nn.Module):
     time_freqs: int = 1024
     time_encoder_dims: Sequence[int] = (1024, 1024, 1024)
     time_encoder_dropout: float = 0.0
+    time_encoder_batchnorm: bool = False
     hidden_dims: Sequence[int] = (1024, 1024, 1024)
     hidden_dropout: float = 0.0
+    hidden_batchnorm: bool = False
     decoder_dims: Sequence[int] = (1024, 1024, 1024)
     decoder_dropout: float = 0.0
+    decoder_batchnorm: bool = False
     layer_norm_before_concatenation: bool = False
     linear_projection_before_concatenation: bool = False
 
@@ -125,6 +129,7 @@ class ConditionalVelocityField(nn.Module):
             act_fn=self.act_fn,
             dropout_rate=self.time_encoder_dropout,
             act_last_layer=False,
+            batchnorm=self.time_encoder_batchnorm,
         )
         self.layer_norm_time = (
             nn.LayerNorm() if self.layer_norm_before_concatenation else lambda x: x
@@ -137,6 +142,7 @@ class ConditionalVelocityField(nn.Module):
             act_last_layer=(
                 False if self.linear_projection_before_concatenation else True
             ),
+            batchnorm=self.hidden_batchnorm,
         )
         self.layer_norm_x = (
             nn.LayerNorm() if self.layer_norm_before_concatenation else lambda x: x
@@ -149,6 +155,7 @@ class ConditionalVelocityField(nn.Module):
             act_last_layer=(
                 False if self.linear_projection_before_concatenation else True
             ),
+            batchnorm=self.decoder_batchnorm,
         )
 
         self.output_layer = nn.Dense(self.output_dim)
@@ -228,7 +235,8 @@ class ConditionalVelocityField(nn.Module):
         input_dim: int,
         conditions: dict[str, jnp.ndarray],
         additional_cond_dim: int = 0,
-    ) -> train_state.TrainState:
+        train: bool = True,
+    ) -> train_state.TrainState | BNTrainState:
         """Create the training state.
 
         Parameters
@@ -251,12 +259,38 @@ class ConditionalVelocityField(nn.Module):
         }
         if additional_cond_dim:
             cond[GENOT_CELL_KEY] = jnp.ones((1, additional_cond_dim))
-        params = self.init(rng, t, x, cond, train=False)["params"]
-        return train_state.TrainState.create(
-            apply_fn=self.apply, params=params, tx=optimizer
-        )
+        variables = self.init(rng, t, x, cond, train=train)
+        if self.uses_batch_norm:
+            assert (
+                self.time_encoder_batchnorm
+                or self.hidden_batchnorm
+                or self.decoder_batchnorm
+            )
+            params = variables["params"]
+            batch_stats = variables["batch_stats"]
+            return BNTrainState.create(
+                apply_fn=self.apply,
+                params=params,
+                tx=optimizer,
+                batch_stats=batch_stats,
+            )
+        else:
+            assert not (
+                self.time_encoder_batchnorm
+                or self.hidden_batchnorm
+                or self.decoder_batchnorm
+            )
+            params = variables["params"]
+            return train_state.TrainState.create(
+                apply_fn=self.apply, params=params, tx=optimizer
+            )
 
     @property
     def output_dims(self):
         """Dimonsions of the output layers."""
         return tuple(self.decoder_dims) + (self.output_dim,)
+    
+    @property
+    def uses_batch_norm(self) -> bool:  
+        """Whether any of the Velocity Field modules uses Batch Normalization"""
+        return self.time_encoder_batchnorm or self.hidden_batchnorm or self.decoder_batchnorm

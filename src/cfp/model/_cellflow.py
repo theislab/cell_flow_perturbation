@@ -229,10 +229,13 @@ class CellFlow:
         pooling_kwargs: dict[str, Any] = types.MappingProxyType({}),
         time_encoder_dims: Sequence[int] = (1024, 1024, 1024),
         time_encoder_dropout: float = 0.0,
+        time_encoder_batchnorm: bool = False,
         hidden_dims: Sequence[int] = (1024, 1024, 1024),
         hidden_dropout: float = 0.0,
+        hidden_batchnorm: bool = False,
         decoder_dims: Sequence[int] = (1024, 1024, 1024),
         decoder_dropout: float = 0.0,
+        decoder_batchnorm: bool = False,
         layers_before_pool: Layers_separate_input_t | Layers_t = dc_field(
             default_factory=lambda: []
         ),
@@ -290,13 +293,21 @@ class CellFlow:
             :attr:`cfp.networks.ConditionalVelocityField.time_encoder`.
         time_encoder_dropout
             Dropout rate for the :attr:`cfp.networks.ConditionalVelocityField.time_encoder`.
+        time_encoder_batchnorm:
+            Whether to use Batch Normalization for the :attr:`cfp.networks.ConditionalVelocityField.time_encoder`.
         hidden_dims
             Dimensions of the layers processing the input to the velocity field
             via :attr:`cfp.networks.ConditionalVelocityField.x_encoder`.
         hidden_dropout
             Dropout rate for :attr:`cfp.networks.ConditionalVelocityField.x_encoder`.
+        hidden_batchnorm:
+            Whether to use Batch Normalization for the :attr:`cfp.networks.ConditionalVelocityField.x_encoder`.
         decoder_dims
             Dimensions of the output layers in :attr:`cfp.networks.ConditionalVelocityField.decoder`.
+        decoder_dropout
+            Dropout rate for the :attr:`cfp.networks.ConditionalVelocityField.decoder`.
+        decoder_batchnorm:
+            Whether to use Batch Normalization for the :attr:`cfp.networks.ConditionalVelocityField.decoder`.
         layers_before_pool
             Layers applied to the condition embeddings before pooling. Can be of type
 
