@@ -95,13 +95,13 @@ class ConditionalVelocityField(nn.Module):
     time_freqs: int = 1024
     time_encoder_dims: Sequence[int] = (1024, 1024, 1024)
     time_encoder_dropout: float = 0.0
-    time_encoder_batchnorm: bool = True
+    time_encoder_batchnorm: bool = False
     hidden_dims: Sequence[int] = (1024, 1024, 1024)
     hidden_dropout: float = 0.0
     hidden_batchnorm: bool = False
     decoder_dims: Sequence[int] = (1024, 1024, 1024)
     decoder_dropout: float = 0.0
-    decoder_batchnorm: bool = True
+    decoder_batchnorm: bool = False
     layer_norm_before_concatenation: bool = False
     linear_projection_before_concatenation: bool = False
 
@@ -260,7 +260,7 @@ class ConditionalVelocityField(nn.Module):
         if additional_cond_dim:
             cond[GENOT_CELL_KEY] = jnp.ones((1, additional_cond_dim))
         variables = self.init(rng, t, x, cond, train=train)
-        if "batch_stats" in variables.keys():
+        if self.uses_batch_norm:
             assert (
                 self.time_encoder_batchnorm
                 or self.hidden_batchnorm
@@ -289,3 +289,8 @@ class ConditionalVelocityField(nn.Module):
     def output_dims(self):
         """Dimonsions of the output layers."""
         return tuple(self.decoder_dims) + (self.output_dim,)
+    
+    @property
+    def uses_batch_norm(self) -> bool:  
+        """Whether any of the Velocity Field modules uses Batch Normalization"""
+        return self.time_encoder_batchnorm or self.hidden_batchnorm or self.decoder_batchnorm

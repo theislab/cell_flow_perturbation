@@ -79,7 +79,7 @@ class OTFlowMatching:
                 target: jnp.ndarray,
                 conditions: dict[str, jnp.ndarray] | None,
                 rng: jax.Array,
-            ) -> jnp.ndarray | tuple[jnp.array, Any]:
+            ) -> jnp.ndarray | tuple[jnp.array, dict[str, Any]]:
                 rng_flow, rng_dropout = jax.random.split(rng, 2)
                 x_t = self.flow.compute_xt(rng_flow, t, source, target)
                 # setting the state dictionary in case batch norm is used

@@ -111,7 +111,7 @@ class GENOT:
                 latent: jnp.ndarray,
                 condition: dict[str, jnp.ndarray] | None,
                 rng: jax.Array,
-            ) -> jnp.ndarray:
+            ) -> jnp.ndarray | tuple[jnp.ndarray, dict[str, Any]]:
                 rng_flow, rng_dropout = jax.random.split(rng, 2)
                 x_t = self.flow.compute_xt(rng_flow, time, latent, target)
                 if condition is not None:
@@ -121,7 +121,7 @@ class GENOT:
                 # setting up for optional use of batch normalization
                 mutable = False
                 state_dict = {"params": params}
-                if hasattr(vf_state, "batch_stats"):
+                if self.vf.uses_batch_norm:
                     state_dict["batch_stats"] = vf_state.batch_stats
                     mutable = ["batch_stats"]
 
@@ -135,8 +135,8 @@ class GENOT:
                     mutable=mutable,
                 )
                 u_t = self.flow.compute_ut(time, source, target)
-                # parsing output of fwd pass on vf
-                if hasattr(vf_state, "batch_stats"):
+                # parsing output of fwd pass on vf                
+                if self.vf.uses_batch_norm:
                     v_t, vf_updates = vf_step
                     return jnp.mean((v_t - u_t) ** 2), vf_updates
                 else:
@@ -153,14 +153,14 @@ class GENOT:
             if hasattr(vf_state, "batch_stats"):
                 loss, vf_updates = loss_step
                 return (
+                    loss,
                     vf_state.apply_gradients(
                         grads=grads, batch_stats=vf_updates["batch_stats"]
                     ),
-                    loss,
                 )
             else:
                 loss = loss_step
-                return vf_state.apply_gradients(grads=grads), loss
+                return loss, vf_state.apply_gradients(grads=grads)
 
         return vf_step_fn
 
@@ -224,7 +224,7 @@ class GENOT:
         )
 
         src, tgt = src[src_ixs], tgt[tgt_ixs]
-        self.vf_state, loss = self.vf_step_fn(
+        loss, self.vf_state = self.vf_step_fn(
             rng_step_fn, self.vf_state, time, src, tgt, latent, condition
         )
         return loss
@@ -290,7 +290,7 @@ class GENOT:
             t: jnp.ndarray, x: jnp.ndarray, cond: dict[str, jnp.ndarray] | None
         ) -> jnp.ndarray:
             state_dict = {"params": self.vf_state.params}
-            if hasattr(self.vf_state, "batch_stats"):
+            if self.vf.uses_batch_norm:
                 state_dict["batch_stats"] = self.vf_state.batch_stats
             return self.vf_state.apply_fn(state_dict, t, x, cond, train=False)
 
