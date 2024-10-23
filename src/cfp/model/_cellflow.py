@@ -434,10 +434,13 @@ class CellFlow:
             time_freqs=time_freqs,
             time_encoder_dims=time_encoder_dims,
             time_encoder_dropout=time_encoder_dropout,
+            time_encoder_batchnorm=time_encoder_batchnorm,
             hidden_dims=hidden_dims,
             hidden_dropout=hidden_dropout,
+            hidden_batchnorm=hidden_batchnorm,
             decoder_dims=decoder_dims,
             decoder_dropout=decoder_dropout,
+            decoder_batchnorm=decoder_batchnorm,
             layer_norm_before_concatenation=layer_norm_before_concatenation,
             linear_projection_before_concatenation=linear_projection_before_concatenation,
         )
