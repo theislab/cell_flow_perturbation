@@ -212,8 +212,7 @@ class ConditionalVelocityField(nn.Module):
         if self.ae == "mlp":
             x = self.x_encoder(x, training=train)
         if self.ae == "cfgen":
-            x = self.x_encoder({"rna": x}, training=train)
-            x = x["rna"]
+            x = self.x_encoder(x, training=train)
         if squeeze:
             cond = jnp.squeeze(cond)  # , 0)
         elif cond.shape[0] != x.shape[0]:  # type: ignore[attr-defined]
@@ -229,9 +228,8 @@ class ConditionalVelocityField(nn.Module):
             out = self.output_layer(out)
         elif self.ae == "cfgen":
             out = self.decoder(
-                {"rna": concatenated}, {"rna": size_factor}, training=train
+                concatenated, size_factor, training=train
             )
-            out = out["rna"]
         return out
 
     def get_condition_embedding(self, condition: dict[str, jnp.ndarray]) -> jnp.ndarray:

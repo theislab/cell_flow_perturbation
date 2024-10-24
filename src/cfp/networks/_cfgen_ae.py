@@ -39,64 +39,31 @@ class CFGenEncoder(BaseModule):
         Literal indicating the covariate used for conditioning
     n_cat: int
         The number of unique categorical variables
-    is_binarized: bool
-        Whether the input data is binarized
     """
 
-    input_dim: dict[str, int]
-    encoder_kwargs: dict[str, dict[str, Any]]
+    input_dim: int
+    encoder_kwargs: dict[str, Any]
     covariate_specific_theta: bool
-    is_binarized: bool
     n_cat: int | None
-    encoder_multimodal_joint_layers: dict[str, Any] | None
 
-    """Implements the Encoder block of the CFGen model"""
+    """Implements the Encoder block for count data"""
 
     def setup(self) -> None:
         """Initialize the module."""
-
         encoder_kwargs = self.encoder_kwargs.unfreeze()
-        # List of modalities present in the data
-        modality_list = list(encoder_kwargs.keys())
-
         # initializing the modality specific components
-        encoder = dict()
-        for mod in modality_list:
-            encoder_kwargs[mod]["dims"] = [
-                self.input_dim[mod],
-                *self.encoder_kwargs[mod]["dims"],
-            ]
-            encoder[mod] = MLPBlock(**encoder_kwargs[mod])
+        encoder_kwargs["dims"] = [
+            self.input_dim,
+            *self.encoder_kwargs["dims"],
+        ]
+        encoder = MLPBlock(**encoder_kwargs)
         self.encoder = encoder
-        # initializing the joint multimodal encoder
-        if self.encoder_multimodal_joint_layers:
-            joint_inputs = sum(
-                [encode_kwargs[mod]["dims"][-1] for mod in self.modality_list]
-            )
-            self.encoder_multimodal_joint_layers["dims"] = [
-                joint_inputs,
-                *self.encoder_multimodal_joint_layers,
-            ]
-            self.encoder_joint = MLPBlock(**self.encoder_multimodal_joint_layers)
 
     def __call__(
-        self, X: dict[str, jnp.ndarray] | jnp.ndarray, training: bool = True
-    ) -> dict[str, jnp.ndarray] | jnp.ndarray:
+        self, X: jnp.ndarray, training: bool = True
+    ) -> jnp.ndarray:
         """Encodes the Input"""
-        ## hack for handling unimodal case
-        if isinstance(X, jnp.ndarray):
-            X = {"rna": X}
-        modality_list = list(self.encoder_kwargs.keys())
-        z = {}
-        # for mod in self.modality_list:
-        for mod in modality_list:
-            z_mod = self.encoder[mod](X[mod], training=training)
-            z[mod] = z_mod
-
-        # Implement joint layers if defined
-        if self.encoder_multimodal_joint_layers:
-            z_joint = jnp.concatenate([z[mod] for mod in z], axis=-1)
-            z = self.encoder_joint(z_joint, training=training)
+        z = self.encoder(X, training=training)
         return z
 
     def create_train_state(
@@ -124,7 +91,7 @@ class CFGenEncoder(BaseModule):
         x = jnp.ones((1, input_dim))
         variables = self.init(rng, x, training=training)
         params = variables["params"]
-        if self.encoder_kwargs["rna"]["batch_norm"]:
+        if self.encoder_kwargs["batch_norm"]:
             batch_stats = variables["batch_stats"]
             return BNTrainState.create(
                 apply_fn=self.apply,
@@ -156,12 +123,10 @@ class CFGenDecoder(BaseModule):
         Whether the input data is binarized
     """
 
-    input_dim: dict[str, int]
-    encoder_kwargs: dict[str, dict[str, Any]]
+    input_dim: int
+    encoder_kwargs: dict[str, Any]
     covariate_specific_theta: bool
-    is_binarized: bool
     n_cat: int | None
-    encoder_multimodal_joint_layers: dict[str, Any] | None
 
     """Implements the Encoder block of the CFGen model"""
 
@@ -170,24 +135,15 @@ class CFGenDecoder(BaseModule):
 
         # copying the encoder kwargs attribures to modify it safely
         encoder_kwargs = self.encoder_kwargs.unfreeze()
-        # List of modalities present in the data
-        modality_list = list(encoder_kwargs.keys())
         # initializing the modality specific components
-        decoder = {}
-        for mod in modality_list:
-            encoder_kwargs[mod]["dims"] = [
-                self.input_dim[mod],
-                *self.encoder_kwargs[mod]["dims"],
-            ]
-            if self.encoder_multimodal_joint_layers:
-                encoder_kwargs[mod]["dims"].append(
-                    self.encoder_multimodal_joint_layers["dims"][-1]
-                )
-            encoder_kwargs[mod]["dims"] = encoder_kwargs[mod]["dims"][::-1]
-            decoder[mod] = MLPBlock(**encoder_kwargs[mod])
+        encoder_kwargs["dims"] = [
+            self.input_dim,
+            *self.encoder_kwargs["dims"],
+        ]
+        encoder_kwargs["dims"] = encoder_kwargs["dims"][::-1]
+        decoder = MLPBlock(**encoder_kwargs)
         self.decoder = decoder
         ## theta
-        in_dim_rna = self.input_dim["rna"]
         if not self.covariate_specific_theta:
             shape = 1
         else:
@@ -196,7 +152,7 @@ class CFGenDecoder(BaseModule):
             "theta",
             _multivariate_normal,
             shape=shape,
-            dim=in_dim_rna,
+            dim=self.input_dim,
             mean=0.0,
             cov=1.0,
         )
@@ -205,26 +161,10 @@ class CFGenDecoder(BaseModule):
         self, z: jnp.ndarray, size_factor: jnp.ndarray, training: bool = True
     ) -> dict[str, jnp.ndarray]:
         """Encodes the Input"""
-        ## hack for handling unimodal case
-        if isinstance(z, jnp.ndarray):
-            z = {"rna": z}
-            size_factor = {"rna": size_factor}
         modality_list = list(self.encoder_kwargs.keys())
-        mu_hat = {}
-        for mod in modality_list:
-            if not self.encoder_multimodal_joint_layers:
-                x_mod = self.decoder[mod](z[mod], training)
-            else:
-                x_mod = self.decoder[mod](z, training)
-
-            if mod != "atac" or (mod == "atac" and not self.is_binarized):
-                mu_hat_mod = nn.softmax(
-                    x_mod, axis=1
-                )  # for Poisson counts the parameterization is similar to RNA
-                mu_hat_mod = mu_hat_mod * size_factor[mod]
-            else:
-                mu_hat_mod = nn.sigmoid(x_mod)
-            mu_hat[mod] = mu_hat_mod
+        x_hat = self.decoder(z, training)
+        x_hat = nn.softmax(x_hat, axis=1)
+        mu_hat = x_hat * size_factor
         return mu_hat
 
     def create_train_state(
@@ -253,7 +193,7 @@ class CFGenDecoder(BaseModule):
         size_factor = jnp.sum(x, axis=1, keepdims=True)
         variables = self.init(rng, x, size_factor, training=training)
         params = variables["params"]
-        if self.encoder_kwargs["rna"]["batch_norm"]:
+        if self.encoder_kwargs["batch_norm"]:
             batch_stats = variables["batch_stats"]
             return BNTrainState.create(
                 apply_fn=self.apply,
