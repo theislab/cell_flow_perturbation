@@ -188,10 +188,9 @@ def _build_nn(
         model = NearestNeighbors(n_neighbors=k)
         model.fit(ref)
         distances, indices = model.kneighbors(query)
-
-    logger.info(
-        "Failed to call cuML. Falling back to neighborhood estimation using CPU with pynndescent."
-    )
+        return _nn2adj(
+            distances=distances, indices=indices, n1=query.shape[0], n2=ref.shape[0]
+        )
 
     try:
         from pynndescent import NNDescent

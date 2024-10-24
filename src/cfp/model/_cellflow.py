@@ -261,10 +261,13 @@ class CellFlow:
         pooling_kwargs: dict[str, Any] = types.MappingProxyType({}),
         time_encoder_dims: Sequence[int] = (1024, 1024, 1024),
         time_encoder_dropout: float = 0.0,
+        time_encoder_batchnorm: bool = False,
         hidden_dims: Sequence[int] = (1024, 1024, 1024),
         hidden_dropout: float = 0.0,
+        hidden_batchnorm: bool = False,
         decoder_dims: Sequence[int] = (1024, 1024, 1024),
         decoder_dropout: float = 0.0,
+        decoder_batchnorm: bool = False,
         layers_before_pool: Layers_separate_input_t | Layers_t = dc_field(
             default_factory=lambda: []
         ),
@@ -328,13 +331,21 @@ class CellFlow:
             :attr:`cfp.networks.ConditionalVelocityField.time_encoder`.
         time_encoder_dropout
             Dropout rate for the :attr:`cfp.networks.ConditionalVelocityField.time_encoder`.
+        time_encoder_batchnorm:
+            Whether to use Batch Normalization for the :attr:`cfp.networks.ConditionalVelocityField.time_encoder`.
         hidden_dims
             Dimensions of the layers processing the input to the velocity field
             via :attr:`cfp.networks.ConditionalVelocityField.x_encoder`.
         hidden_dropout
             Dropout rate for :attr:`cfp.networks.ConditionalVelocityField.x_encoder`.
+        hidden_batchnorm:
+            Whether to use Batch Normalization for the :attr:`cfp.networks.ConditionalVelocityField.x_encoder`.
         decoder_dims
             Dimensions of the output layers in :attr:`cfp.networks.ConditionalVelocityField.decoder`.
+        decoder_dropout
+            Dropout rate for the :attr:`cfp.networks.ConditionalVelocityField.decoder`.
+        decoder_batchnorm:
+            Whether to use Batch Normalization for the :attr:`cfp.networks.ConditionalVelocityField.decoder`.
         layers_before_pool
             Layers applied to the condition embeddings before pooling. Can be of type
 
@@ -482,10 +493,13 @@ class CellFlow:
             time_freqs=time_freqs,
             time_encoder_dims=time_encoder_dims,
             time_encoder_dropout=time_encoder_dropout,
+            time_encoder_batchnorm=time_encoder_batchnorm,
             hidden_dims=hidden_dims,
             hidden_dropout=hidden_dropout,
+            hidden_batchnorm=hidden_batchnorm,
             decoder_dims=decoder_dims,
             decoder_dropout=decoder_dropout,
+            decoder_batchnorm=decoder_batchnorm,
             layer_norm_before_concatenation=layer_norm_before_concatenation,
             linear_projection_before_concatenation=linear_projection_before_concatenation,
             ae=ae,
@@ -663,8 +677,8 @@ class CellFlow:
     def predict(
         self,
         adata: ad.AnnData,
-        sample_rep: str,
         covariate_data: pd.DataFrame,
+        sample_rep: str | None = None,
         condition_id_key: str | None = None,
         key_added_prefix: str | None = None,
         n_samples: int = 1,
@@ -676,13 +690,12 @@ class CellFlow:
         ----------
         adata
             An :class:`~anndata.AnnData` object with the source representation.
-        sample_rep
-            Key in :attr:`~anndata.AnnData.obsm` where the sample representation is stored or
-            ``'X'`` to use :attr:`~anndata.AnnData.X`.
         covariate_data
             Covariate data defining the condition to predict. This :class:`~pandas.DataFrame` should have the same
             columns as :attr:`~anndata.AnnData.obs` of :attr:`cfp.model.CellFlow.adata`, and
             as registered in :attr:`cfp.model.CellFlow.dm`.
+        sample_rep
+            Key in :attr:`~anndata.AnnData.obsm` where the sample representation is stored or ``'X'`` to use :attr:`~anndata.AnnData.X`. If :obj:`None`, the key is assumed to be the same as for the training data.
         condition_id_key
             Key in ``'covariate_data'`` defining the condition name.
         key_added_prefix
@@ -700,8 +713,11 @@ class CellFlow:
         If ``'key_added_prefix'`` is :obj:`None`, a :class:`dict` with the predicted sample representation for each perturbation,
         otherwise stores the predictions in :attr:`~anndata.AnnData.obsm` and returns :obj:`None`.
         """
-        if not self.solver.is_trained:  # type: ignore[union-attr]
+        if self.solver is None or not self.solver.is_trained:
             raise ValueError("Model not trained. Please call `train` first.")
+
+        if sample_rep is None:
+            sample_rep = self._dm.sample_rep
 
         if n_samples > 1:
             if not isinstance(self.solver, _genot.GENOT):
@@ -775,7 +791,7 @@ class CellFlow:
         -------
         A :class:`pandas.DataFrame` with the condition embeddings.
         """
-        if self.solver is None:
+        if self.solver is None or not self.solver.is_trained:
             raise ValueError("Model not trained. Please call `train` first.")
 
         if not self._dm.is_conditional:

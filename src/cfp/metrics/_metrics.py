@@ -8,7 +8,15 @@ from sklearn.metrics import pairwise_distances, r2_score
 from sklearn.metrics.pairwise import rbf_kernel
 from cfp.external import NegativeBinomial
 
-__all__ = ["compute_metrics", "compute_metrics_fast", "compute_mean_metrics"]
+__all__ = [
+    "compute_metrics",
+    "compute_metrics_fast",
+    "compute_mean_metrics",
+    "compute_scalar_mmd",
+    "compute_r_squared",
+    "compute_sinkhorn_div",
+    "compute_e_distance",
+]
 
 
 def compute_r_squared(x: ArrayLike, y: ArrayLike) -> float:

@@ -1037,3 +1037,8 @@ class DataManager:
     def perturb_covar_keys(self) -> list[str]:
         """List of all perturbation covariates."""
         return self._perturb_covar_keys
+
+    @property
+    def sample_rep(self) -> str | dict[str, str]:
+        """Key of the sample representation."""
+        return self._sample_rep

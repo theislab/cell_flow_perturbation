@@ -16,10 +16,16 @@ perturbation_covariate_comb_args = [
 
 class TestCellFlow:
     @pytest.mark.parametrize("solver", ["otfm", "genot"])
+    @pytest.mark.parametrize("time_encoder_batchnorm", [True, False])
+    @pytest.mark.parametrize("hidden_batchnorm", [True, False])
+    @pytest.mark.parametrize("decoder_batchnorm", [True, False])
     def test_cellflow_solver(
         self,
         adata_perturbation,
         solver,
+        time_encoder_batchnorm,
+        hidden_batchnorm,
+        decoder_batchnorm,
     ):
         sample_rep = "X"
         control_key = "control"
@@ -47,6 +53,9 @@ class TestCellFlow:
             hidden_dims=(32, 32),
             decoder_dims=(32, 32),
             condition_encoder_kwargs=condition_encoder_kwargs,
+            time_encoder_batchnorm=time_encoder_batchnorm,
+            hidden_batchnorm=hidden_batchnorm,
+            decoder_batchnorm=decoder_batchnorm,
         )
         assert cf._trainer is not None
 
@@ -226,12 +235,18 @@ class TestCellFlow:
     @pytest.mark.parametrize("solver", ["otfm", "genot"])
     @pytest.mark.parametrize("n_conditions_on_log_iteration", [None, 0, 1])
     @pytest.mark.parametrize("n_conditions_on_train_end", [None, 0, 1])
+    @pytest.mark.parametrize("time_encoder_batchnorm", [True, False])
+    @pytest.mark.parametrize("hidden_batchnorm", [True, False])
+    @pytest.mark.parametrize("decoder_batchnorm", [True, False])
     def test_cellflow_with_validation(
         self,
         adata_perturbation,
         solver,
         n_conditions_on_log_iteration,
         n_conditions_on_train_end,
+        time_encoder_batchnorm,
+        hidden_batchnorm,
+        decoder_batchnorm,
     ):
         # TODO(@MUCDK) after PR #33 check for larger n_conditions_on...
         cf = cfp.model.CellFlow(adata_perturbation, solver=solver)
@@ -273,6 +288,9 @@ class TestCellFlow:
             hidden_dims=(32, 32),
             decoder_dims=(32, 32),
             condition_encoder_kwargs=condition_encoder_kwargs,
+            time_encoder_batchnorm=time_encoder_batchnorm,
+            hidden_batchnorm=hidden_batchnorm,
+            decoder_batchnorm=decoder_batchnorm,
         )
         assert cf._trainer is not None
 
@@ -284,10 +302,16 @@ class TestCellFlow:
         assert f"val_{metric_to_compute}_mean" in cf._trainer.training_logs
 
     @pytest.mark.parametrize("solver", ["otfm", "genot"])
+    @pytest.mark.parametrize("time_encoder_batchnorm", [True, False])
+    @pytest.mark.parametrize("hidden_batchnorm", [True, False])
+    @pytest.mark.parametrize("decoder_batchnorm", [True, False])
     def test_cellflow_predict(
         self,
         adata_perturbation,
         solver,
+        time_encoder_batchnorm,
+        hidden_batchnorm,
+        decoder_batchnorm,
     ):
         cf = cfp.model.CellFlow(adata_perturbation, solver=solver)
         cf.prepare_data(
@@ -307,6 +331,9 @@ class TestCellFlow:
             hidden_dims=(32, 32),
             decoder_dims=(32, 32),
             condition_encoder_kwargs=condition_encoder_kwargs,
+            time_encoder_batchnorm=time_encoder_batchnorm,
+            hidden_batchnorm=hidden_batchnorm,
+            decoder_batchnorm=decoder_batchnorm,
         )
 
         cf.train(num_iterations=3)
