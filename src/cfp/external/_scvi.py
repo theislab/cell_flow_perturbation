@@ -8,6 +8,7 @@ import jax.numpy as jnp
 import numpy as np
 from scvi.model import JaxSCVI
 
+from cfp.external._scvi_utils import NegativeBinomial
 from cfp._types import ArrayLike
 from cfp.external._scvi_utils import CFJaxVAE
 

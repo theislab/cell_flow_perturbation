@@ -6,6 +6,7 @@ from ott.geometry import costs, pointcloud
 from ott.tools.sinkhorn_divergence import sinkhorn_divergence
 from sklearn.metrics import pairwise_distances, r2_score
 from sklearn.metrics.pairwise import rbf_kernel
+from cfp.external import NegativeBinomial
 
 __all__ = [
     "compute_metrics",
@@ -55,6 +56,16 @@ def compute_metrics(x: ArrayLike, y: ArrayLike) -> dict[str, float]:
     metrics["e_distance"] = compute_e_distance(x, y)
     metrics["mmd"] = compute_scalar_mmd(x, y)
     return metrics
+
+
+def compute_negbin_rec_loss(
+    counts: ArrayLike, params: tuple[ArrayLike, ArrayLike]
+) -> float:
+    """Compute the reconstruction loss for the negative binomial noise model"""
+    mean, theta = params
+    px = NegativeBinomial(mean=mean, inverse_dispersion=jnp.exp(theta))
+    loss = -px.log_prob(counts).sum(1).mean()
+    return loss
 
 
 def compute_mean_metrics(metrics: dict[str, dict[str, float]], prefix: str = ""):

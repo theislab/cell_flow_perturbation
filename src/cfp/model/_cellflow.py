@@ -23,11 +23,14 @@ from cfp.data._dataloader import PredictionSampler, TrainSampler, ValidationSamp
 from cfp.data._datamanager import DataManager
 from cfp.model._utils import _write_predictions
 from cfp.networks._velocity_field import ConditionalVelocityField
+from cfp.networks._cfgen_ae import CFGenEncoder, CFGenDecoder
 from cfp.plotting import _utils
 from cfp.solvers import _genot, _otfm
 from cfp.training._callbacks import BaseCallback
 from cfp.training._trainer import CellFlowTrainer
 from cfp.utils import match_linear
+from cfp.model._cfgen import CFGen
+from cfp.training._cfgen_ae_trainer import CFGenAETrainer
 
 __all__ = ["CellFlow"]
 
@@ -53,10 +56,12 @@ class CellFlow:
         self._solver_class = _otfm.OTFlowMatching if solver == "otfm" else _genot.GENOT
         self._dataloader: TrainSampler | None = None
         self._trainer: CellFlowTrainer | None = None
+        self._cfgen_ae_trainer: CFGenAETrainer | None = None
         self._validation_data: dict[str, ValidationData] = {}
         self._solver: _otfm.OTFlowMatching | _genot.GENOT | None = None
         self._condition_dim: int | None = None
         self._vf: ConditionalVelocityField | None = None
+        self._cfgen: CFGen | None = None
 
     def prepare_data(
         self,
@@ -179,6 +184,33 @@ class CellFlow:
 
         self._data_dim = self.train_data.cell_data.shape[-1]
 
+    def prepare_cfgen_validation_data(
+        self,
+        adata: ad.AnnData,
+        sample_rep: str | dict[str, str],
+        control_key: str,
+        perturbation_covariates: dict[str, Sequence[str]],
+        perturbation_covariate_reps: dict[str, str] | None = None,
+        sample_covariates: Sequence[str] | None = None,
+        sample_covariate_reps: dict[str, str] | None = None,
+        split_covariates: Sequence[str] | None = None,
+        max_combination_length: int | None = None,
+        null_value: float = 0.0,
+    ) -> None:
+        dm = DataManager(
+            adata,
+            sample_rep=sample_rep,
+            control_key=control_key,
+            perturbation_covariates=perturbation_covariates,
+            perturbation_covariate_reps=perturbation_covariate_reps,
+            sample_covariates=sample_covariates,
+            sample_covariate_reps=sample_covariate_reps,
+            split_covariates=split_covariates,
+            max_combination_length=max_combination_length,
+            null_value=null_value,
+        )
+        self.cfgen_val_data = dm.get_train_data(adata)
+
     def prepare_validation_data(
         self,
         adata: ad.AnnData,
@@ -249,10 +281,16 @@ class CellFlow:
         flow: dict[Literal["constant_noise", "bridge"], float] | None = None,
         match_fn: Callable[[ArrayLike, ArrayLike], ArrayLike] = match_linear,
         optimizer: optax.GradientTransformation = optax.adam(1e-4),
+        cfgen_optimizer: optax.GradientTransformation = optax.adam(1e-4),
         layer_norm_before_concatenation: bool = False,
         linear_projection_before_concatenation: bool = False,
         genot_source_layers: Layers_t | None = None,
         seed=0,
+        ae: Literal["mlp", "cfgen"] = "mlp",
+        cfgen_kwargs: dict[str, Any] | None = None,
+        normalization_type: Literal[
+            "none", "proportions", "log_gexp", "log_gexp_scaled"
+        ] = "none",
     ) -> None:
         """Prepare the model for training.
 
@@ -418,6 +456,27 @@ class CellFlow:
         solver_kwargs = solver_kwargs or {}
         flow = flow or {"constant_noise": 0.0}
 
+        ## preparing cfgen models
+        cfgen_encoder = cfgen_decoder = None
+        if ae == "cfgen":
+            cfgen_encoder = CFGenEncoder(**cfgen_kwargs)
+            cfgen_decoder = CFGenDecoder(**cfgen_kwargs)
+            self.cfgen = CFGen(
+                cfgen_encoder,
+                cfgen_decoder,
+                {
+                    "rng": jax.random.PRNGKey(seed),
+                    "optimizer": cfgen_optimizer,
+                    "training": False,
+                },
+                {
+                    "rng": jax.random.PRNGKey(seed),
+                    "optimizer": cfgen_optimizer,
+                    "training": False,
+                },
+                normalization_type=normalization_type,
+            )
+
         self.vf = ConditionalVelocityField(
             output_dim=self._data_dim,
             max_combination_length=self.train_data.max_combination_length,
@@ -443,6 +502,9 @@ class CellFlow:
             decoder_batchnorm=decoder_batchnorm,
             layer_norm_before_concatenation=layer_norm_before_concatenation,
             linear_projection_before_concatenation=linear_projection_before_concatenation,
+            ae=ae,
+            cfgen_encoder=cfgen_encoder,
+            cfgen_decoder=cfgen_decoder,
         )
 
         flow, noise = next(iter(flow.items()))
@@ -482,6 +544,74 @@ class CellFlow:
                 f"Solver must be an instance of OTFlowMatching or GENOT, got {type(self.solver)}"
             )
         self._trainer = CellFlowTrainer(solver=self.solver)  # type: ignore[arg-type]
+        if ae == "cfgen":
+            self._cfgen_ae_trainer = CFGenAETrainer(
+                self.cfgen, normalization_type=normalization_type
+            )
+
+    def pretrain_cfgen_ae(
+        self,
+        num_iterations: int,
+        train_batch_size: int = 1024,
+        val_batch_size: int = 1024,
+        valid_freq: int = 1000,
+        callbacks: Sequence[BaseCallback] = [],
+        monitor_metrics: Sequence[str] = [],
+    ) -> None:
+        """Train the model.
+
+        Note
+        ----
+        A low value of ``'valid_freq'`` results in long training
+        because predictions are time-consuming compared to training steps.
+
+        Parameters
+        ----------
+        num_iterations
+            Number of iterations to train the model.
+        batch_size
+            Batch size.
+        valid_freq
+            Frequency of validation.
+        callbacks
+            Callbacks to perform at each validation step. There are two types of callbacks:
+            - Callbacks for computations should inherit from :class:`cfp.training.ComputationCallback:` see e.g.
+              :class:`cfp.training.Metrics`.
+            - Callbacks for logging should inherit from :class:`~cfp.training.LoggingCallback` see e.g.
+              :class:`~cfp.training.WandbLogger`.
+        monitor_metrics
+            Metrics to monitor.
+
+        Returns
+        -------
+        Updates the following fields:
+
+        - :attr:`cfp.model.CellFlow.dataloader` - the training dataloader.
+        - :attr:`cfp.model.CellFlow.solver` - the trained solver.
+        """
+        if self.train_data is None:
+            raise ValueError("Data not initialized. Please call `prepare_data` first.")
+
+        if self.trainer is None:
+            raise ValueError(
+                "Model not initialized. Please call `prepare_model` first."
+            )
+
+        self._dataloader = TrainSampler(
+            data=self.train_data, batch_size=train_batch_size
+        )
+        validation_loaders = TrainSampler(
+            self.cfgen_val_data, batch_size=val_batch_size
+        )
+
+        self.cfgen_ae_trainer.train(
+            dataloader=self._dataloader,
+            num_iterations=num_iterations,
+            valid_freq=valid_freq,
+            valid_loaders={"cgfen": validation_loaders},
+            callbacks=callbacks,
+            monitor_metrics=monitor_metrics,
+        )
 
     def train(
         self,
@@ -799,6 +929,11 @@ class CellFlow:
     def trainer(self) -> CellFlowTrainer | None:
         """The trainer used for training."""
         return self._trainer
+
+    @property
+    def cfgen_ae_trainer(self) -> CFGenAETrainer | None:
+        """The trainer used for training."""
+        return self._cfgen_ae_trainer
 
     @property
     def validation_data(self) -> dict[str, ValidationData]:

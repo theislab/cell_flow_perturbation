@@ -13,7 +13,13 @@ from tqdm import tqdm
 
 from cfp._logging import logger
 from cfp._types import ArrayLike
-from cfp.data._data import ConditionData, PredictionData, ReturnData, TrainingData, ValidationData
+from cfp.data._data import (
+    ConditionData,
+    PredictionData,
+    ReturnData,
+    TrainingData,
+    ValidationData,
+)
 
 from ._utils import _flatten_list, _to_list
 
@@ -84,7 +90,7 @@ class DataManager:
         null_value: float = 0.0,
     ):
         self._adata = adata
-        self._sample_rep = self._verify_sample_rep(sample_rep)
+        self._sample_rep = self._verify_rep(sample_rep)
         self._control_key = control_key
         self._perturbation_covariates = self._verify_perturbation_covariates(
             perturbation_covariates
@@ -477,7 +483,7 @@ class DataManager:
             )
 
     @staticmethod
-    def _verify_sample_rep(sample_rep: str | dict[str, str]) -> str | dict[str, str]:
+    def _verify_rep(sample_rep: str | dict[str, str]) -> str | dict[str, str]:
         if not (isinstance(sample_rep, str) or isinstance(sample_rep, dict)):
             raise ValueError(
                 f"`sample_rep` should be of type `str` or `dict`, found {sample_rep} to be of type {type(sample_rep)}."

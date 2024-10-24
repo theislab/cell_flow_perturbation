@@ -5,18 +5,6 @@ import jax.numpy as jnp
 from cfp._types import ArrayLike
 
 
-def _multivariate_normal(
-    rng: jax.Array,
-    shape: tuple[int, ...],
-    dim: int,
-    mean: float = 0.0,
-    cov: float = 1.0,
-) -> jnp.ndarray:
-    mean = jnp.full(dim, fill_value=mean)
-    cov = jnp.diag(jnp.full(dim, fill_value=cov))
-    return jax.random.multivariate_normal(rng, mean=mean, cov=cov, shape=shape)
-
-
 def _write_predictions(
     adata: ad.AnnData,
     predictions: dict[str, ArrayLike],
