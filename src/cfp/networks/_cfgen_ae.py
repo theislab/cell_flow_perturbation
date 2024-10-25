@@ -157,7 +157,6 @@ class CountsDecoder(BaseModule):
         self, z: jnp.ndarray, size_factor: jnp.ndarray, training: bool = True
     ) -> dict[str, jnp.ndarray]:
         """Encodes the Input"""
-        modality_list = list(self.encoder_kwargs.keys())
         x_hat = self.decoder(z, training)
         x_hat = nn.softmax(x_hat, axis=1)
         mu_hat = x_hat * size_factor

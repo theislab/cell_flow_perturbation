@@ -153,23 +153,13 @@ class CountsAE:
         if self.decoder.encoder_kwargs["batch_norm"]:
             decoder_params_dict["batch_stats"] = self.decoder_state.batch_stats
         ## forward pass on the encoder
-        ## in case of batch normalization retrieving the update of the stats 
-        encoder_out = self.encoder_state.apply_fn(
+        z = self.encoder_state.apply_fn(
             encoder_params_dict, normalized_counts, training = training
         )
-        if self.encoder.encoder_kwargs["batch_norm"]:
-            z, enc_updates = encoder_out
-        else:
-            z = encoder_out
         ## forward pass on the decoder
-        ## in case of batch normalization retrieving the update of the stats
-        decoder_out = self.decoder_state.apply_fn(
+        x_hat = self.decoder_state.apply_fn(
             decoder_params_dict, z, size_factor, training = training
         )
-        if self.decoder.encoder_kwargs["batch_norm"]:
-            x_hat, dec_updates = decoder_out
-        else:
-            x_hat = decoder_out
         return x_hat, self.decoder_state.params["theta"]
 
     @property
