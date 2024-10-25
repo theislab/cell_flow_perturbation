@@ -51,11 +51,6 @@ class CountsEncoder(BaseModule):
     def setup(self) -> None:
         """Initialize the module."""
         encoder_kwargs = self.encoder_kwargs.unfreeze()
-        # initializing the modality specific components
-        encoder_kwargs["dims"] = [
-            self.input_dim,
-            *self.encoder_kwargs["dims"],
-        ]
         encoder = MLPBlock(**encoder_kwargs)
         self.encoder = encoder
 
@@ -66,11 +61,15 @@ class CountsEncoder(BaseModule):
         z = self.encoder(X, training=training)
         return z
 
+    @property
+    def latent_dim(self) -> int:
+        """Returns the dimensionality of the latent space"""
+        return self.encoder_kwargs["dims"][-1]
+
     def create_train_state(
         self,
         rng: jax.Array,
         optimizer: optax.OptState,
-        input_dim: int,
         training: bool = False,
     ) -> BNTrainState | TrainState:
         """Create the training state.
@@ -88,7 +87,9 @@ class CountsEncoder(BaseModule):
         -------
             The training state.
         """
-        x = jnp.ones((1, input_dim))
+        # computing dummy counts
+        x = jnp.ones((1, self.input_dim))
+        # retrieving the state of the module
         variables = self.init(rng, x, training=training)
         params = variables["params"]
         if self.encoder_kwargs["batch_norm"]:
@@ -135,12 +136,7 @@ class CountsDecoder(BaseModule):
 
         # copying the encoder kwargs attribures to modify it safely
         encoder_kwargs = self.encoder_kwargs.unfreeze()
-        # initializing the modality specific components
-        encoder_kwargs["dims"] = [
-            self.input_dim,
-            *self.encoder_kwargs["dims"],
-        ]
-        encoder_kwargs["dims"] = encoder_kwargs["dims"][::-1]
+        encoder_kwargs["dims"] = [*encoder_kwargs["dims"][::-1], self.input_dim]
         decoder = MLPBlock(**encoder_kwargs)
         self.decoder = decoder
         ## theta
@@ -167,11 +163,15 @@ class CountsDecoder(BaseModule):
         mu_hat = x_hat * size_factor
         return mu_hat
 
+    @property
+    def latent_dim(self) -> int:
+        """Returns the dimensionality of the latent space"""
+        return self.encoder_kwargs["dims"][-1]
+
     def create_train_state(
         self,
         rng: jax.Array,
         optimizer: optax.OptState,
-        input_dim: int,
         training: bool = False,
     ) -> BNTrainState | TrainState:
         """Create the training state.
@@ -189,9 +189,13 @@ class CountsDecoder(BaseModule):
         -------
             The training state.
         """
-        x = jnp.ones((1, input_dim))
+        # computing dummy counts and size factor
+        x = jnp.ones((1, self.input_dim))
         size_factor = jnp.sum(x, axis=1, keepdims=True)
-        variables = self.init(rng, x, size_factor, training=training)
+        # computing dummy latent state
+        z = jnp.ones((1, self.latent_dim))
+        # retrieving the state of the module
+        variables = self.init(rng, z, size_factor, training=training)
         params = variables["params"]
         if self.encoder_kwargs["batch_norm"]:
             batch_stats = variables["batch_stats"]

@@ -33,12 +33,8 @@ class CountsAE:
         self.encoder = encoder
         self.decoder = decoder
 
-        self.encoder_state = self.encoder.create_train_state(
-            input_dim=self.encoder.input_dim, **kwargs_encoder
-        )
-        self.decoder_state = self.decoder.create_train_state(
-            input_dim=self.encoder.encoder_kwargs["dims"][-1], **kwargs_decoder
-        )
+        self.encoder_state = self.encoder.create_train_state(**kwargs_encoder)
+        self.decoder_state = self.decoder.create_train_state(**kwargs_decoder)
         self.normalization_type = normalization_type
         self.ae_fwd_fn = self._get_ae_fwd_fn()
 
