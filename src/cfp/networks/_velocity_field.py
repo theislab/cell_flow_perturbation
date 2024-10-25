@@ -214,10 +214,7 @@ class ConditionalVelocityField(nn.Module):
             size_factor = jnp.sum(x, axis=1, keepdims=True)
         t = time_encoder.cyclical_time_encoder(t, n_freqs=self.time_freqs)
         t = self.time_encoder(t, training=train)
-        if self.ae == "mlp":
-            x = self.x_encoder(x, training=train)
-        if self.ae == "cfgen":
-            x = self.x_encoder(x, training=train)
+        x = self.x_encoder(x, training=train)
         if squeeze:
             cond = jnp.squeeze(cond)  # , 0)
         elif cond.shape[0] != x.shape[0]:  # type: ignore[attr-defined]
