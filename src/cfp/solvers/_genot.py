@@ -13,8 +13,8 @@ from ott.neural.networks import velocity_field
 from ott.solvers import utils as solver_utils
 
 from cfp._constants import GENOT_CELL_KEY
-from cfp._types import ArrayLike
 from cfp._distributions import _multivariate_normal
+from cfp._types import ArrayLike
 
 __all__ = ["GENOT"]
 
@@ -135,7 +135,7 @@ class GENOT:
                     mutable=mutable,
                 )
                 u_t = self.flow.compute_ut(time, source, target)
-                # parsing output of fwd pass on vf                
+                # parsing output of fwd pass on vf
                 if self.vf.uses_batch_norm:
                     v_t, vf_updates = vf_step
                     return jnp.mean((v_t - u_t) ** 2), vf_updates

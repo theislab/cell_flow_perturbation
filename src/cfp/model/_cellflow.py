@@ -21,16 +21,16 @@ from cfp._types import Layers_separate_input_t, Layers_t
 from cfp.data._data import ConditionData, ValidationData
 from cfp.data._dataloader import PredictionSampler, TrainSampler, ValidationSampler
 from cfp.data._datamanager import DataManager
+from cfp.model._cfgen import CountsAE
 from cfp.model._utils import _write_predictions
+from cfp.networks._cfgen_ae import CountsDecoder, CountsEncoder
 from cfp.networks._velocity_field import ConditionalVelocityField
-from cfp.networks._cfgen_ae import CountsEncoder, CountsDecoder
 from cfp.plotting import _utils
 from cfp.solvers import _genot, _otfm
 from cfp.training._callbacks import BaseCallback
+from cfp.training._cfgen_ae_trainer import CFGenAETrainer
 from cfp.training._trainer import CellFlowTrainer
 from cfp.utils import match_linear
-from cfp.model._cfgen import CountsAE
-from cfp.training._cfgen_ae_trainer import CFGenAETrainer
 
 __all__ = ["CellFlow"]
 

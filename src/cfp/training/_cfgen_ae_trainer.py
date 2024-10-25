@@ -3,17 +3,12 @@ from typing import Any, Literal
 
 import jax
 import numpy as np
-import jax.numpy as jnp
 from numpy.typing import ArrayLike
 from tqdm import tqdm
 
-from cfp.model._cfgen import CountsAE
-
-from cfp.external import NegativeBinomial
 from cfp.data._dataloader import TrainSampler, ValidationSampler
+from cfp.model._cfgen import CountsAE
 from cfp.training._callbacks import BaseCallback, CallbackRunner
-
-from cfp._counts import normalize_expression
 
 
 class CFGenAETrainer:

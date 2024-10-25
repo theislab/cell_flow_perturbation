@@ -1,6 +1,7 @@
+from typing import Literal
+
 import jax.numpy as jnp
 
-from typing import Literal
 from cfp._types import ArrayLike
 
 
@@ -21,10 +22,12 @@ def normalize_expression(
                             - "learnt_autoencoder": Apply log transformation to gene expression data.
                             - "log_gexp_scaled": Apply log transformation after scaling by size factor.
 
-    Returns:
+    Returns
+    -------
         torch.Tensor: Normalized gene expression data.
 
-    Raises:
+    Raises
+    ------
         NotImplementedError: If the encoder type is not recognized.
     """
     if normalization_type == "none":

@@ -1,21 +1,14 @@
-import abc
-from collections.abc import Callable, Sequence
-from dataclasses import field as dc_field
-from typing import Any, Literal
+from typing import Any
 
 import jax
 import jax.numpy as jnp
 import optax
 from flax import linen as nn
-from flax.linen import initializers
 from flax.training.train_state import TrainState
-from flax.typing import FrozenDict
 
 from cfp._batch_norm import BNTrainState
-from cfp._constants import GENOT_CELL_KEY
-from cfp._types import ArrayLike, Layers_separate_input_t, Layers_t
 from cfp._distributions import _multivariate_normal
-from cfp.networks._set_encoders import MLPBlock, BaseModule
+from cfp.networks._set_encoders import BaseModule, MLPBlock
 
 __all__ = [
     "CountsEncoder",
@@ -54,9 +47,7 @@ class CountsEncoder(BaseModule):
         encoder = MLPBlock(**encoder_kwargs)
         self.encoder = encoder
 
-    def __call__(
-        self, X: jnp.ndarray, training: bool = True
-    ) -> jnp.ndarray:
+    def __call__(self, X: jnp.ndarray, training: bool = True) -> jnp.ndarray:
         """Encodes the Input"""
         z = self.encoder(X, training=training)
         return z
@@ -133,7 +124,6 @@ class CountsDecoder(BaseModule):
 
     def setup(self) -> None:
         """Initialize the module."""
-
         # copying the encoder kwargs attribures to modify it safely
         encoder_kwargs = self.encoder_kwargs.unfreeze()
         encoder_kwargs["dims"] = [*encoder_kwargs["dims"][::-1], self.input_dim]

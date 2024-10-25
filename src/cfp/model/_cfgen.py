@@ -2,16 +2,15 @@ from collections.abc import Callable
 from typing import Any, Literal
 
 import jax
-import flax.linen as nn
-import numpy as np
 import jax.numpy as jnp
-
+import numpy as np
 from flax.training.train_state import TrainState
+
 from cfp._batch_norm import BNTrainState
-from cfp.external._scvi import NegativeBinomial
-from cfp.networks._cfgen_ae import CountsEncoder, CountsDecoder
 from cfp._counts import normalize_expression
 from cfp._types import ArrayLike
+from cfp.external._scvi import NegativeBinomial
+from cfp.networks._cfgen_ae import CountsDecoder, CountsEncoder
 
 __all__ = ["CountsAE"]
 
@@ -58,7 +57,7 @@ class CountsAE:
                 ## we need to modify it later in case we are using batch normalization
                 encoder_params_dict = {"params": encoder_params}
                 decoder_params_dict = {"params": decoder_params}
-                ## setting the default value for the `mutable` argument of `apply_fn` 
+                ## setting the default value for the `mutable` argument of `apply_fn`
                 mutable_enc = False
                 mutable_dec = False
                 ## updating the encoder and decoder parameters in case of batch normalization
@@ -69,9 +68,12 @@ class CountsAE:
                     decoder_params_dict["batch_stats"] = decoder_state.batch_stats
                     mutable_dec = ["batch_stats"]
                 ## forward pass on the encoder
-                ## in case of batch normalization retrieving the update of the stats 
+                ## in case of batch normalization retrieving the update of the stats
                 encoder_out = encoder_state.apply_fn(
-                    encoder_params_dict, normalized_counts, training = True, mutable = mutable_enc
+                    encoder_params_dict,
+                    normalized_counts,
+                    training=True,
+                    mutable=mutable_enc,
                 )
                 if self.encoder.encoder_kwargs["batch_norm"]:
                     z, enc_updates = encoder_out
@@ -80,7 +82,11 @@ class CountsAE:
                 ## forward pass on the decoder
                 ## in case of batch normalization retrieving the update of the stats
                 decoder_out = decoder_state.apply_fn(
-                    decoder_params_dict, z, size_factor, training = True, mutable = mutable_dec
+                    decoder_params_dict,
+                    z,
+                    size_factor,
+                    training=True,
+                    mutable=mutable_dec,
                 )
                 if self.decoder.encoder_kwargs["batch_norm"]:
                     x_hat, dec_updates = decoder_out
@@ -154,11 +160,11 @@ class CountsAE:
             decoder_params_dict["batch_stats"] = self.decoder_state.batch_stats
         ## forward pass on the encoder
         z = self.encoder_state.apply_fn(
-            encoder_params_dict, normalized_counts, training = training
+            encoder_params_dict, normalized_counts, training=training
         )
         ## forward pass on the decoder
         x_hat = self.decoder_state.apply_fn(
-            decoder_params_dict, z, size_factor, training = training
+            decoder_params_dict, z, size_factor, training=training
         )
         return x_hat, self.decoder_state.params["theta"]
 

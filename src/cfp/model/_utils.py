@@ -1,6 +1,4 @@
 import anndata as ad
-import jax
-import jax.numpy as jnp
 
 from cfp._types import ArrayLike
 

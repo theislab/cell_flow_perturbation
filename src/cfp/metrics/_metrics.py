@@ -6,6 +6,7 @@ from ott.geometry import costs, pointcloud
 from ott.tools.sinkhorn_divergence import sinkhorn_divergence
 from sklearn.metrics import pairwise_distances, r2_score
 from sklearn.metrics.pairwise import rbf_kernel
+
 from cfp.external import NegativeBinomial
 
 __all__ = [

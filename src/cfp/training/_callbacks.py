@@ -10,10 +10,10 @@ from numpy.typing import ArrayLike
 
 from cfp.metrics._metrics import (
     compute_e_distance,
+    compute_negbin_rec_loss,
     compute_r_squared,
     compute_scalar_mmd,
     compute_sinkhorn_div,
-    compute_negbin_rec_loss,
 )
 
 __all__ = [

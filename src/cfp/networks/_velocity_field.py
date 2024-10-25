@@ -13,8 +13,8 @@ from cfp._batchnorm import BNTrainState
 from cfp._constants import GENOT_CELL_KEY
 from cfp._logging import logger
 from cfp._types import Layers_separate_input_t, Layers_t
+from cfp.networks._cfgen_ae import CountsDecoder, CountsEncoder
 from cfp.networks._set_encoders import ConditionEncoder, MLPBlock
-from cfp.networks._cfgen_ae import CountsEncoder, CountsDecoder
 
 __all__ = ["ConditionalVelocityField"]
 
@@ -152,7 +152,6 @@ class ConditionalVelocityField(nn.Module):
             )
         elif self.ae == "cfgen":
             self.x_encoder = self.cfgen_encoder
-            # self.x_encoder = CountsEncoder(**self.cfgen_kwargs)
         else:
             raise ValueError(
                 "The selected argument for `self.ae` is not supported, choose between ['mlp', 'cfgen']"
@@ -175,7 +174,6 @@ class ConditionalVelocityField(nn.Module):
             self.output_layer = nn.Dense(self.output_dim)
         elif self.ae == "cfgen":
             self.decoder = self.cfgen_decoder
-            # self.decoder = CGenDecoder(**self.cfgen_kwargs)
         else:
             raise ValueError(
                 "The selected argument for `self.ae` is not supported, choose between ['mlp', 'cfgen']"
@@ -229,9 +227,7 @@ class ConditionalVelocityField(nn.Module):
             out = self.decoder(concatenated, training=train)
             out = self.output_layer(out)
         elif self.ae == "cfgen":
-            out = self.decoder(
-                concatenated, size_factor, training=train
-            )
+            out = self.decoder(concatenated, size_factor, training=train)
         return out
 
     def get_condition_embedding(self, condition: dict[str, jnp.ndarray]) -> jnp.ndarray:
@@ -318,8 +314,12 @@ class ConditionalVelocityField(nn.Module):
     def output_dims(self):
         """Dimonsions of the output layers."""
         return tuple(self.decoder_dims) + (self.output_dim,)
-    
+
     @property
-    def uses_batch_norm(self) -> bool:  
+    def uses_batch_norm(self) -> bool:
         """Whether any of the Velocity Field modules uses Batch Normalization"""
-        return self.time_encoder_batchnorm or self.hidden_batchnorm or self.decoder_batchnorm
+        return (
+            self.time_encoder_batchnorm
+            or self.hidden_batchnorm
+            or self.decoder_batchnorm
+        )
