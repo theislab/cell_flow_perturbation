@@ -85,7 +85,7 @@ class OTFlowMatching:
                 # setting the state dictionary in case batch norm is used
                 mutable = False
                 state_dict = {"params": params}
-                if hasattr(vf_state, "batch_stats"):
+                if self.vf.uses_batch_norm:
                     state_dict["batch_stats"] = vf_state.batch_stats
                     mutable = ["batch_stats"]
 
@@ -100,7 +100,7 @@ class OTFlowMatching:
                 )
                 u_t = self.flow.compute_ut(t, source, target)
                 # parsing output of fwd pass on vf
-                if hasattr(vf_state, "batch_stats"):
+                if self.vf.uses_batch_norm:
                     v_t, vf_updates = vf_step
                     return jnp.mean((v_t - u_t) ** 2), vf_updates
                 else:
@@ -111,22 +111,25 @@ class OTFlowMatching:
             key_t, key_model = jax.random.split(rng, 2)
             t = self.time_sampler(key_t, batch_size)
             grad_fn = jax.value_and_grad(
-                loss_fn, has_aux=hasattr(vf_state, "batch_stats")
+                loss_fn, has_aux=self.vf.uses_batch_norm
             )
             loss_step, grads = grad_fn(
                 vf_state.params, t, source, target, conditions, key_model
             )
-            if hasattr(vf_state, "batch_stats"):
+
+            if self.vf.uses_batch_norm:
+                # parsing step output
                 loss, vf_updates = loss_step
-                return (
-                    vf_state.apply_gradients(
-                        grads=grads, batch_stats=vf_updates["batch_stats"]
-                    ),
-                    loss,
-                )
-            else:
+                # applying gradients
+                vf_state = vf_state.apply_gradients(grads=grads)
+                # updating batch stats
+                vf_state = vf_state.replace(batch_stats=vf_updates["batch_stats"])
+            else:       
+                # parsing step output
                 loss = loss_step
-                return vf_state.apply_gradients(grads=grads), loss
+                # applying gradients
+                vf_state = vf_state.apply_gradients(grads=grads)
+            return loss, vf_state
 
         return vf_step_fn
 
@@ -157,7 +160,7 @@ class OTFlowMatching:
             src_ixs, tgt_ixs = solver_utils.sample_joint(rng_resample, tmat)
             src, tgt = src[src_ixs], tgt[tgt_ixs]
 
-        self.vf_state, loss = self.vf_step_fn(
+        loss, self.vf_state = self.vf_step_fn(
             rng_step_fn,
             self.vf_state,
             src,
@@ -216,7 +219,7 @@ class OTFlowMatching:
             t: jnp.ndarray, x: jnp.ndarray, cond: dict[str, jnp.ndarray] | None
         ) -> jnp.ndarray:
             state_dict = {"params": self.vf_state.params}
-            if hasattr(self.vf_state, "batch_stats"):
+            if self.vf.uses_batch_norm:
                 state_dict["batch_stats"] = self.vf_state.batch_stats
             return self.vf_state.apply_fn(state_dict, t, x, cond, train=False)
 

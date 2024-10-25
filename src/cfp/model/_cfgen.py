@@ -114,29 +114,31 @@ class CountsAE:
                 counts,
             )
             if not self.encoder.encoder_kwargs["batch_norm"]:
+                # parsing step output
                 loss = loss_step
-                return (
-                    encoder_state.apply_gradients(grads=encoder_grads),
-                    decoder_state.apply_gradients(grads=decoder_grads),
-                    loss,
-                )
+                # applying gradients
+                encoder_state = encoder_state.apply_gradients(grads=encoder_grads)
+                decoder_state = decoder_state.apply_gradients(grads=decoder_grads)
             else:
+                # parsing step output
                 loss, (enc_updates, dec_updates) = loss_step
-                return (
-                    encoder_state.apply_gradients(
-                        grads=encoder_grads, batch_stats=enc_updates["batch_stats"]
-                    ),
-                    decoder_state.apply_gradients(
-                        grads=decoder_grads, batch_stats=dec_updates["batch_stats"]
-                    ),
-                    loss,
-                )
+                # applying gradients
+                encoder_state = encoder_state.apply_gradients(grads=encoder_grads)
+                decoder_state = decoder_state.apply_gradients(grads=decoder_grads)
+                # updating batch stats
+                encoder_state = encoder_state.replace(batch_stats=enc_updates["batch_stats"])
+                decoder_state = decoder_state.replace(batch_stats=dec_updates["batch_stats"])
+            return (
+                loss,
+                encoder_state,
+                decoder_state
+            )
 
         return ae_fwd_fn
 
     def fwd_fn(self, rng: np.ndarray, batch: dict[str, ArrayLike], training: bool):
         counts = batch["src_cell_data"]
-        self.encoder_state, self.decoder_state, loss = self.ae_fwd_fn(
+        loss, self.encoder_state, self.decoder_state = self.ae_fwd_fn(
             self.encoder_state,
             self.decoder_state,
             counts,

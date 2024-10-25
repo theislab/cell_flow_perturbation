@@ -144,23 +144,25 @@ class GENOT:
                     return jnp.mean((v_t - u_t) ** 2)
 
             grad_fn = jax.value_and_grad(
-                loss_fn, has_aux=hasattr(vf_state, "batch_stats")
+                loss_fn, has_aux=self.vf.uses_batch_norm
             )
             loss_step, grads = grad_fn(
                 vf_state.params, time, source, target, latent, conditions, rng
             )
-
-            if hasattr(vf_state, "batch_stats"):
+            
+            if self.vf.uses_batch_norm:
+                # parsing step output
                 loss, vf_updates = loss_step
-                return (
-                    loss,
-                    vf_state.apply_gradients(
-                        grads=grads, batch_stats=vf_updates["batch_stats"]
-                    ),
-                )
-            else:
+                # applying gradients
+                vf_state = vf_state.apply_gradients(grads=grads)
+                # updating batch stats
+                vf_state = vf_state.replace(batch_stats=vf_updates["batch_stats"])
+            else:       
+                # parsing step output
                 loss = loss_step
-                return loss, vf_state.apply_gradients(grads=grads)
+                # applying gradients
+                vf_state = vf_state.apply_gradients(grads=grads)
+            return loss, vf_state
 
         return vf_step_fn
 
