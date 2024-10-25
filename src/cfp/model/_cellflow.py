@@ -598,10 +598,10 @@ class CellFlow:
             )
 
         self._dataloader = TrainSampler(
-            data=self.train_data, batch_size=train_batch_size
+            data=self.train_data, batch_size=train_batch_size, return_pairs=False
         )
         validation_loaders = TrainSampler(
-            self.cfgen_val_data, batch_size=val_batch_size
+            self.cfgen_val_data, batch_size=val_batch_size, return_pairs=False
         )
 
         self.cfgen_ae_trainer.train(

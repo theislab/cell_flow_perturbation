@@ -137,7 +137,7 @@ class CountsAE:
         return ae_fwd_fn
 
     def fwd_fn(self, rng: np.ndarray, batch: dict[str, ArrayLike], training: bool):
-        counts = batch["src_cell_data"]
+        counts = batch["counts"]
         loss, self.encoder_state, self.decoder_state = self.ae_fwd_fn(
             self.encoder_state,
             self.decoder_state,

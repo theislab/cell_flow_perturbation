@@ -9,6 +9,7 @@ from cfp.training._callbacks import (
                                      WandbLogger,
 )
 from cfp.training._trainer import CellFlowTrainer
+from cfp.training._cfgen_ae_trainer import CFGenAETrainer
 
 __all__ = [
     "CellFlowTrainer",

@@ -22,8 +22,9 @@ class TrainSampler:
 
     """
 
-    def __init__(self, data: TrainingData, batch_size: int = 1024):
+    def __init__(self, data: TrainingData, batch_size: int = 1024, return_pairs: bool = True):
         self._data = data
+        self._return_pairs = return_pairs
         self._data_idcs = jnp.arange(data.cell_data.shape[0])
         self.batch_size = batch_size
         self.n_source_dists = data.n_controls
@@ -41,7 +42,7 @@ class TrainSampler:
 
         @jax.jit
         def _sample(rng: jax.Array) -> Any:
-            rng_1, rng_2, rng_3, rng_4 = jax.random.split(rng, 4)
+            rng_1, rng_2, rng_3, rng_4, rng_5 = jax.random.split(rng, 5)
             source_dist_idx = jax.random.choice(rng_1, self.n_source_dists)
             source_cells_mask = self._data.split_covariates_mask == source_dist_idx
             src_cond_p = source_cells_mask / jnp.count_nonzero(source_cells_mask)
@@ -70,11 +71,16 @@ class TrainSampler:
                 return {"src_cell_data": source_batch, "tgt_cell_data": target_batch}
 
             condition_batch = self.get_embeddings(target_dist_idx)
-            return {
-                "src_cell_data": source_batch,
-                "tgt_cell_data": target_batch,
-                "condition": condition_batch,
-            }
+            if self._return_pairs:
+                return {
+                    "src_cell_data": source_batch,
+                    "tgt_cell_data": target_batch,
+                    "condition": condition_batch,
+                }
+            else:
+                counts = jnp.concatenate([source_batch, target_batch], axis = 0)
+                counts = jax.random.choice(rng_5, counts, shape=(self.batch_size,))
+                return {"counts": counts}
 
         self.sample = _sample
 
