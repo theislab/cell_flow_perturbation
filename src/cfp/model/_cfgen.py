@@ -126,13 +126,13 @@ class CountsAE:
                 encoder_state = encoder_state.apply_gradients(grads=encoder_grads)
                 decoder_state = decoder_state.apply_gradients(grads=decoder_grads)
                 # updating batch stats
-                encoder_state = encoder_state.replace(batch_stats=enc_updates["batch_stats"])
-                decoder_state = decoder_state.replace(batch_stats=dec_updates["batch_stats"])
-            return (
-                loss,
-                encoder_state,
-                decoder_state
-            )
+                encoder_state = encoder_state.replace(
+                    batch_stats=enc_updates["batch_stats"]
+                )
+                decoder_state = decoder_state.replace(
+                    batch_stats=dec_updates["batch_stats"]
+                )
+            return (loss, encoder_state, decoder_state)
 
         return ae_fwd_fn
 

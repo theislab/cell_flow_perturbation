@@ -9,7 +9,7 @@ import numpy as np
 from scvi.model import JaxSCVI
 
 from cfp._types import ArrayLike
-from cfp.external._scvi_utils import CFJaxVAE
+from cfp.external._scvi_utils import CFJaxVAE, NegativeBinomial
 
 if TYPE_CHECKING:
     from typing import Literal

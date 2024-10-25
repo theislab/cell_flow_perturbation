@@ -110,9 +110,7 @@ class OTFlowMatching:
             batch_size = len(source)
             key_t, key_model = jax.random.split(rng, 2)
             t = self.time_sampler(key_t, batch_size)
-            grad_fn = jax.value_and_grad(
-                loss_fn, has_aux=self.vf.uses_batch_norm
-            )
+            grad_fn = jax.value_and_grad(loss_fn, has_aux=self.vf.uses_batch_norm)
             loss_step, grads = grad_fn(
                 vf_state.params, t, source, target, conditions, key_model
             )
@@ -124,7 +122,7 @@ class OTFlowMatching:
                 vf_state = vf_state.apply_gradients(grads=grads)
                 # updating batch stats
                 vf_state = vf_state.replace(batch_stats=vf_updates["batch_stats"])
-            else:       
+            else:
                 # parsing step output
                 loss = loss_step
                 # applying gradients

@@ -467,12 +467,12 @@ class CellFlow:
                 {
                     "rng": jax.random.PRNGKey(seed),
                     "optimizer": cfgen_optimizer,
-                    "training": False,
+                    "training": True,
                 },
                 {
                     "rng": jax.random.PRNGKey(seed),
                     "optimizer": cfgen_optimizer,
-                    "training": False,
+                    "training": True,
                 },
                 normalization_type=normalization_type,
             )
