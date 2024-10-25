@@ -147,20 +147,15 @@ class CountsAE:
         ## we need to modify it later in case we are using batch normalization
         encoder_params_dict = {"params": self.encoder_state.params}
         decoder_params_dict = {"params": self.decoder_state.params}
-        ## setting the default value for the `mutable` argument of `apply_fn` 
-        mutable_enc = False
-        mutable_dec = False
         ## updating the encoder and decoder parameters in case of batch normalization
         if self.encoder.encoder_kwargs["batch_norm"]:
             encoder_params_dict["batch_stats"] = self.encoder_state.batch_stats
-            mutable_enc = ["batch_stats"]
         if self.decoder.encoder_kwargs["batch_norm"]:
             decoder_params_dict["batch_stats"] = self.decoder_state.batch_stats
-            mutable_dec = ["batch_stats"]
         ## forward pass on the encoder
         ## in case of batch normalization retrieving the update of the stats 
         encoder_out = self.encoder_state.apply_fn(
-            encoder_params_dict, normalized_counts, training = training, mutable = mutable_enc
+            encoder_params_dict, normalized_counts, training = training
         )
         if self.encoder.encoder_kwargs["batch_norm"]:
             z, enc_updates = encoder_out
@@ -169,7 +164,7 @@ class CountsAE:
         ## forward pass on the decoder
         ## in case of batch normalization retrieving the update of the stats
         decoder_out = self.decoder_state.apply_fn(
-            decoder_params_dict, z, size_factor, training = training, mutable = mutable_dec
+            decoder_params_dict, z, size_factor, training = training
         )
         if self.decoder.encoder_kwargs["batch_norm"]:
             x_hat, dec_updates = decoder_out
