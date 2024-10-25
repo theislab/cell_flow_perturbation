@@ -23,13 +23,13 @@ from cfp.data._dataloader import PredictionSampler, TrainSampler, ValidationSamp
 from cfp.data._datamanager import DataManager
 from cfp.model._utils import _write_predictions
 from cfp.networks._velocity_field import ConditionalVelocityField
-from cfp.networks._cfgen_ae import CFGenEncoder, CFGenDecoder
+from cfp.networks._cfgen_ae import CountsEncoder, CountsDecoder
 from cfp.plotting import _utils
 from cfp.solvers import _genot, _otfm
 from cfp.training._callbacks import BaseCallback
 from cfp.training._trainer import CellFlowTrainer
 from cfp.utils import match_linear
-from cfp.model._cfgen import CFGen
+from cfp.model._cfgen import CountsAE
 from cfp.training._cfgen_ae_trainer import CFGenAETrainer
 
 __all__ = ["CellFlow"]
@@ -61,7 +61,7 @@ class CellFlow:
         self._solver: _otfm.OTFlowMatching | _genot.GENOT | None = None
         self._condition_dim: int | None = None
         self._vf: ConditionalVelocityField | None = None
-        self._cfgen: CFGen | None = None
+        self._cfgen: CountsAE | None = None
 
     def prepare_data(
         self,
@@ -459,9 +459,9 @@ class CellFlow:
         ## preparing cfgen models
         cfgen_encoder = cfgen_decoder = None
         if ae == "cfgen":
-            cfgen_encoder = CFGenEncoder(**cfgen_kwargs)
-            cfgen_decoder = CFGenDecoder(**cfgen_kwargs)
-            self.cfgen = CFGen(
+            cfgen_encoder = CountsEncoder(**cfgen_kwargs)
+            cfgen_decoder = CountsDecoder(**cfgen_kwargs)
+            self.cfgen = CountsAE(
                 cfgen_encoder,
                 cfgen_decoder,
                 {

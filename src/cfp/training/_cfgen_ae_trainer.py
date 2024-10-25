@@ -7,7 +7,7 @@ import jax.numpy as jnp
 from numpy.typing import ArrayLike
 from tqdm import tqdm
 
-from cfp.model._cfgen import CFGen
+from cfp.model._cfgen import CountsAE
 
 from cfp.external import NegativeBinomial
 from cfp.data._dataloader import TrainSampler, ValidationSampler
@@ -17,14 +17,14 @@ from cfp._counts import normalize_expression
 
 
 class CFGenAETrainer:
-    """Trainer for the CFGen AutoEncoder with Negative Binomial noise model
+    """Trainer for the CountsAE AutoEncoder with Negative Binomial noise model
 
     Parameters
     ----------
         dataloader
             Data sampler.
         ae
-            CFGen AE architecture.
+            CountsAE AE architecture.
         seed
             Random seed for subsampling validation data.
 
@@ -36,7 +36,7 @@ class CFGenAETrainer:
 
     def __init__(
         self,
-        cfgen: CFGen,
+        cfgen: CountsAE,
         normalization_type: Literal[
             "none", "proportions", "log_gexp", "log_gexp_scaled"
         ] = "none",

@@ -18,14 +18,14 @@ from cfp._distributions import _multivariate_normal
 from cfp.networks._set_encoders import MLPBlock, BaseModule
 
 __all__ = [
-    "CFGenEncoder",
-    "CFGenDecoder",
+    "CountsEncoder",
+    "CountsDecoder",
 ]
 
 
-class CFGenEncoder(BaseModule):
+class CountsEncoder(BaseModule):
     """
-    Implements the AutoEncoder architecture of the CFGen model
+    Implements the AutoEncoder architecture of the CountsAE model
 
     Parameters
     ----------
@@ -103,9 +103,9 @@ class CFGenEncoder(BaseModule):
             return TrainState.create(apply_fn=self.apply, params=params, tx=optimizer)
 
 
-class CFGenDecoder(BaseModule):
+class CountsDecoder(BaseModule):
     """
-    Implements the AutoEncoder architecture of the CFGen model
+    Implements the AutoEncoder architecture of the CountsAE model
 
     Parameters
     ----------
@@ -128,7 +128,7 @@ class CFGenDecoder(BaseModule):
     covariate_specific_theta: bool
     n_cat: int | None
 
-    """Implements the Encoder block of the CFGen model"""
+    """Implements the Encoder block of the CountsAE model"""
 
     def setup(self) -> None:
         """Initialize the module."""

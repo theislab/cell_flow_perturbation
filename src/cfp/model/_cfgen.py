@@ -9,20 +9,20 @@ import jax.numpy as jnp
 from flax.training.train_state import TrainState
 from cfp._batch_norm import BNTrainState
 from cfp.external._scvi import NegativeBinomial
-from cfp.networks._cfgen_ae import CFGenEncoder, CFGenDecoder
+from cfp.networks._cfgen_ae import CountsEncoder, CountsDecoder
 from cfp._counts import normalize_expression
 from cfp._types import ArrayLike
 
-__all__ = ["CFGen"]
+__all__ = ["CountsAE"]
 
 
-class CFGen:
+class CountsAE:
     """"""
 
     def __init__(
         self,
-        encoder: CFGenEncoder,
-        decoder: CFGenDecoder,
+        encoder: CountsEncoder,
+        decoder: CountsDecoder,
         kwargs_encoder: dict[str, Any] = {},
         kwargs_decoder: dict[str, Any] = {},
         normalization_type: Literal[

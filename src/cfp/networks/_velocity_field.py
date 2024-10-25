@@ -14,7 +14,7 @@ from cfp._constants import GENOT_CELL_KEY
 from cfp._logging import logger
 from cfp._types import Layers_separate_input_t, Layers_t
 from cfp.networks._set_encoders import ConditionEncoder, MLPBlock
-from cfp.networks._cfgen_ae import CFGenEncoder, CFGenDecoder
+from cfp.networks._cfgen_ae import CountsEncoder, CountsDecoder
 
 __all__ = ["ConditionalVelocityField"]
 
@@ -107,8 +107,8 @@ class ConditionalVelocityField(nn.Module):
     linear_projection_before_concatenation: bool = False
     ae: Literal["mlp", "cfgen"] = "mlp"
     # cfgen_kwargs: dict[str, Any] | None = None
-    cfgen_encoder: CFGenEncoder | None = None
-    cfgen_decoder: CFGenDecoder | None = None
+    cfgen_encoder: CountsEncoder | None = None
+    cfgen_decoder: CountsDecoder | None = None
 
     def setup(self):
         """Initialize the network."""
@@ -134,7 +134,7 @@ class ConditionalVelocityField(nn.Module):
             act_fn=self.act_fn,
             dropout_rate=self.time_encoder_dropout,
             act_last_layer=False,
-            batchnorm=self.time_encoder_batchnorm,
+            batch_norm=self.time_encoder_batchnorm,
         )
         self.layer_norm_time = (
             nn.LayerNorm() if self.layer_norm_before_concatenation else lambda x: x
@@ -152,7 +152,7 @@ class ConditionalVelocityField(nn.Module):
             )
         elif self.ae == "cfgen":
             self.x_encoder = self.cfgen_encoder
-            # self.x_encoder = CFGenEncoder(**self.cfgen_kwargs)
+            # self.x_encoder = CountsEncoder(**self.cfgen_kwargs)
         else:
             raise ValueError(
                 "The selected argument for `self.ae` is not supported, choose between ['mlp', 'cfgen']"
