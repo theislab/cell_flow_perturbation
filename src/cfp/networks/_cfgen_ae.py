@@ -18,28 +18,28 @@ __all__ = [
 
 class CountsEncoder(BaseModule):
     """
-    Implements the AutoEncoder architecture of the CountsAE model
+    Implements the Encoder architecture for the CountsAE model in the unimodal case
 
     Parameters
     ----------
-    input_dim: dict[str, int]
-        The dimensionality of the input for each modality
-    encoder_kwargs: dict[str, dict[str, Any]]
-        The key-word arguments for initializing the encoder (one for each modality)
+    input_dim: int
+        The dimensionality of the input for the RNA expression (i.e.: number of genes).
+    encoder_kwargs: dict[str, Any]
+        The key-word arguments for initializing the encoder MLP block.
     covariate_specific_theta: bool
-        Whether to use a dispersion coefficient for each covariate
-    conditioning_covariate: str
-        Literal indicating the covariate used for conditioning
-    n_cat: int
-        The number of unique categorical variables
+        Whether to use a dispersion coefficient for each conditioning covariate. Defaults to `False`.
+    n_cat: int | None
+        The number of unique categorical variables. Defaults to `False`.
+
+    Returns
+    -------
+        The latent representation of RNA expression counts.
     """
 
     input_dim: int
     encoder_kwargs: dict[str, Any]
     covariate_specific_theta: bool
     n_cat: int | None
-
-    """Implements the Encoder block for count data"""
 
     def setup(self) -> None:
         """Initialize the module."""
@@ -48,7 +48,18 @@ class CountsEncoder(BaseModule):
         self.encoder = encoder
 
     def __call__(self, X: jnp.ndarray, training: bool = True) -> jnp.ndarray:
-        """Encodes the Input"""
+        """Forward pass through the encoder.
+        Parameters
+        ----------
+            x
+                Data of shape ``[batch, self.input_dim]``.
+            training
+                If :obj:`True`, enables dropout for training.
+
+        Returns
+        -------
+            Latent representation of RNA expression counts of shape ``[batch, self.latent_dim]``.
+        """
         z = self.encoder(X, training=training)
         return z
 
@@ -76,8 +87,8 @@ class CountsEncoder(BaseModule):
                 Random number generator.
             optimizer
                 Optimizer.
-            input_dim
-                Dimensionality of the velocity field.
+            training
+                If :obj:`True`, enables dropout for training. Defaults to `True`
 
         Returns
         -------
@@ -102,22 +113,22 @@ class CountsEncoder(BaseModule):
 
 class CountsDecoder(BaseModule):
     """
-    Implements the AutoEncoder architecture of the CountsAE model
+    Implements the Decoder architecture for the CountsAE model in the unimodal case
 
     Parameters
     ----------
-    input_dim: dict[str, int]
-        The dimensionality of the input for each modality
-    encoder_kwargs: dict[str, dict[str, Any]]
-        The key-word arguments for initializing the encoder (one for each modality)
+    input_dim: int
+        The dimensionality of the input for the RNA expression (i.e.: number of genes).
+    encoder_kwargs: dict[str, Any]
+        The key-word arguments for initializing the encoder MLP block.
     covariate_specific_theta: bool
-        Whether to use a dispersion coefficient for each covariate
-    conditioning_covariate: str
-        Literal indicating the covariate used for conditioning
-    n_cat: int
-        The number of unique categorical variables
-    is_binarized: bool
-        Whether the input data is binarized
+        Whether to use a dispersion coefficient for each conditioning covariate. Defaults to `False`.
+    n_cat: int | None
+        The number of unique categorical variables. Defaults to `False`.
+
+    Returns
+    -------
+        The parameters for the Negative Binomial noise model for RNA expression counts.
     """
 
     input_dim: int
@@ -151,7 +162,20 @@ class CountsDecoder(BaseModule):
     def __call__(
         self, z: jnp.ndarray, size_factor: jnp.ndarray, training: bool = True
     ) -> dict[str, jnp.ndarray]:
-        """Encodes the Input"""
+        """Forward pass through the decoder.
+        Parameters
+        ----------
+            z
+                Latent states of shape ``[batch, self.latent_dim]``.
+            size_factor
+                Size factor for each cell of shape ``[batch, self.input_dim]``.
+            training
+                If :obj:`True`, enables dropout for training.
+
+        Returns
+        -------
+            The mean of the Negative Binomial noise model for RNA expression counts ``[batch, self.latent_dim]``.
+        """
         x_hat = self.decoder(z, training)
         x_hat = nn.softmax(x_hat, axis=1)
         mu_hat = x_hat * size_factor
@@ -181,8 +205,8 @@ class CountsDecoder(BaseModule):
                 Random number generator.
             optimizer
                 Optimizer.
-            input_dim
-                Dimensionality of the velocity field.
+            training
+                If :obj:`True`, enables dropout for training. Defaults to `True`
 
         Returns
         -------

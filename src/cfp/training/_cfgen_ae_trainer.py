@@ -17,10 +17,10 @@ class CountsAETrainer:
 
     Parameters
     ----------
-        dataloader
-            Data sampler.
-        ae
-            CountsAE AE architecture.
+        counts_ae
+            Auto encoder model for count data, instance of the ``CountsAE`` class.
+        normalization_type
+            The normalization applied to the count data before feeding it to the models
         seed
             Random seed for subsampling validation data.
 
@@ -86,16 +86,18 @@ class CountsAETrainer:
 
         Parameters
         ----------
+            dataloader
+                The dataloader for the training data
             num_iterations
                 Number of iterations to train the model.
-            batch_size
-                Batch size.
             valid_freq
                 Frequency of validation.
-            callbacks
-                Callback functions.
+            val_dataloaders
+                The dataloaders
             monitor_metrics
                 Metrics to monitor.
+            callbacks
+                Callback functions.
 
         Returns
         -------

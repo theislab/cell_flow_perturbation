@@ -16,7 +16,22 @@ __all__ = ["CountsAE"]
 
 
 class CountsAE:
-    """"""
+    """
+    Implements the Auto Encoder model for count data in the unimodal case
+
+    Parameters
+    ----------
+    encoder: CountsEncoder
+        An already initialized instance of `CountsEncoder`.
+    decoder: CountsDecoder
+        An already initialized instance of `CountsDecoder`.
+    kwargs_encoder: dict[str, Any]
+        Keyword arguments for initializing the encoder's training state (i.e.: input to `self.encoder.create_train_state`).
+    kwargs_decoder: dict[str, Any]
+        Keyword arguments for initializing the decoder's training state (i.e.: input to `self.decoder.create_train_state`).
+    normalization_type: Literal['none', 'proportions', 'log_gexp', 'log_gexp_scaled']
+        The normalization applied to the count data before feeding it to the models
+    """
 
     def __init__(
         self,
