@@ -12,7 +12,7 @@ from cfp.model._cfgen import CountsAE
 from cfp.training._callbacks import BaseCallback, CallbackRunner
 
 
-class CFGenAETrainer:
+class CountsAETrainer:
     """Trainer for the CountsAE AutoEncoder with Negative Binomial noise model
 
     Parameters

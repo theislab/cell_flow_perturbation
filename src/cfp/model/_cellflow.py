@@ -28,7 +28,7 @@ from cfp.networks._velocity_field import ConditionalVelocityField
 from cfp.plotting import _utils
 from cfp.solvers import _genot, _otfm
 from cfp.training._callbacks import BaseCallback
-from cfp.training._cfgen_ae_trainer import CFGenAETrainer
+from cfp.training._cfgen_ae_trainer import CountsAETrainer
 from cfp.training._trainer import CellFlowTrainer
 from cfp.utils import match_linear
 
@@ -56,7 +56,7 @@ class CellFlow:
         self._solver_class = _otfm.OTFlowMatching if solver == "otfm" else _genot.GENOT
         self._dataloader: TrainSampler | None = None
         self._trainer: CellFlowTrainer | None = None
-        self._cfgen_ae_trainer: CFGenAETrainer | None = None
+        self._cfgen_ae_trainer: CountsAETrainer | None = None
         self._validation_data: dict[str, ValidationData] = {}
         self._solver: _otfm.OTFlowMatching | _genot.GENOT | None = None
         self._condition_dim: int | None = None
@@ -545,7 +545,7 @@ class CellFlow:
             )
         self._trainer = CellFlowTrainer(solver=self.solver)  # type: ignore[arg-type]
         if ae == "cfgen":
-            self._cfgen_ae_trainer = CFGenAETrainer(
+            self._cfgen_ae_trainer = CountsAETrainer(
                 self.cfgen, normalization_type=normalization_type
             )
 
@@ -931,7 +931,7 @@ class CellFlow:
         return self._trainer
 
     @property
-    def cfgen_ae_trainer(self) -> CFGenAETrainer | None:
+    def cfgen_ae_trainer(self) -> CountsAETrainer | None:
         """The trainer used for training."""
         return self._cfgen_ae_trainer
 
