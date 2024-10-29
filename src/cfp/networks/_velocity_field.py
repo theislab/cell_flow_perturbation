@@ -105,10 +105,6 @@ class ConditionalVelocityField(nn.Module):
     decoder_batchnorm: bool = False
     layer_norm_before_concatenation: bool = False
     linear_projection_before_concatenation: bool = False
-    ae: Literal["mlp", "cfgen"] = "mlp"
-    # cfgen_kwargs: dict[str, Any] | None = None
-    cfgen_encoder: CountsEncoder | None = None
-    cfgen_decoder: CountsDecoder | None = None
 
     def setup(self):
         """Initialize the network."""
@@ -140,44 +136,28 @@ class ConditionalVelocityField(nn.Module):
             nn.LayerNorm() if self.layer_norm_before_concatenation else lambda x: x
         )
 
-        ## initializing encoder
-        if self.ae == "mlp":
-            self.x_encoder = MLPBlock(
-                dims=self.hidden_dims,
-                act_fn=self.act_fn,
-                dropout_rate=self.hidden_dropout,
-                act_last_layer=(
-                    False if self.linear_projection_before_concatenation else True
-                ),
-            )
-        elif self.ae == "cfgen":
-            self.x_encoder = self.cfgen_encoder
-        else:
-            raise ValueError(
-                "The selected argument for `self.ae` is not supported, choose between ['mlp', 'cfgen']"
-            )
+        self.x_encoder = MLPBlock(
+            dims=self.hidden_dims,
+            act_fn=self.act_fn,
+            dropout_rate=self.hidden_dropout,
+            act_last_layer=(
+                False if self.linear_projection_before_concatenation else True
+            ),
+        )
         ## initializing optional layer normalization
         self.layer_norm_x = (
             nn.LayerNorm() if self.layer_norm_before_concatenation else lambda x: x
         )
 
-        ## initializing decoder
-        if self.ae == "mlp":
-            self.decoder = MLPBlock(
-                dims=self.decoder_dims,
-                act_fn=self.act_fn,
-                dropout_rate=self.decoder_dropout,
-                act_last_layer=(
-                    False if self.linear_projection_before_concatenation else True
-                ),
-            )
-            self.output_layer = nn.Dense(self.output_dim)
-        elif self.ae == "cfgen":
-            self.decoder = self.cfgen_decoder
-        else:
-            raise ValueError(
-                "The selected argument for `self.ae` is not supported, choose between ['mlp', 'cfgen']"
-            )
+        self.decoder = MLPBlock(
+            dims=self.decoder_dims,
+            act_fn=self.act_fn,
+            dropout_rate=self.decoder_dropout,
+            act_last_layer=(
+                False if self.linear_projection_before_concatenation else True
+            ),
+        )
+        self.output_layer = nn.Dense(self.output_dim)
 
     def __call__(
         self,
@@ -208,8 +188,6 @@ class ConditionalVelocityField(nn.Module):
             cond = self.condition_encoder(cond, training=train)
         else:
             cond = jnp.concatenate(list(cond.values()), axis=-1)
-        if self.ae == "cfgen":
-            size_factor = jnp.sum(x, axis=1, keepdims=True)
         t = time_encoder.cyclical_time_encoder(t, n_freqs=self.time_freqs)
         t = self.time_encoder(t, training=train)
         x = self.x_encoder(x, training=train)
@@ -223,11 +201,8 @@ class ConditionalVelocityField(nn.Module):
         cond = self.layer_norm_condition(cond)
 
         concatenated = jnp.concatenate((t, x, cond), axis=-1)
-        if self.ae == "mlp":
-            out = self.decoder(concatenated, training=train)
-            out = self.output_layer(out)
-        elif self.ae == "cfgen":
-            out = self.decoder(concatenated, size_factor, training=train)
+        out = self.decoder(concatenated, training=train)
+        out = self.output_layer(out)
         return out
 
     def get_condition_embedding(self, condition: dict[str, jnp.ndarray]) -> jnp.ndarray:

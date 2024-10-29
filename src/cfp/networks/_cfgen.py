@@ -61,10 +61,10 @@ class CountsAE:
                 mutable_enc = False
                 mutable_dec = False
                 ## updating the encoder and decoder parameters in case of batch normalization
-                if self.encoder.encoder_kwargs["batch_norm"]:
+                if self.encoder.uses_batch_norm:
                     encoder_params_dict["batch_stats"] = encoder_state.batch_stats
                     mutable_enc = ["batch_stats"]
-                if self.decoder.encoder_kwargs["batch_norm"]:
+                if self.decoder.uses_batch_norm:
                     decoder_params_dict["batch_stats"] = decoder_state.batch_stats
                     mutable_dec = ["batch_stats"]
                 ## forward pass on the encoder
@@ -75,7 +75,7 @@ class CountsAE:
                     training=True,
                     mutable=mutable_enc,
                 )
-                if self.encoder.encoder_kwargs["batch_norm"]:
+                if self.encoder.uses_batch_norm:
                     z, enc_updates = encoder_out
                 else:
                     z = encoder_out
@@ -88,7 +88,7 @@ class CountsAE:
                     training=True,
                     mutable=mutable_dec,
                 )
-                if self.decoder.encoder_kwargs["batch_norm"]:
+                if self.decoder.uses_batch_norm:
                     x_hat, dec_updates = decoder_out
                 else:
                     x_hat = decoder_out
@@ -98,7 +98,7 @@ class CountsAE:
                     inverse_dispersion=jnp.exp(decoder_params["theta"]),
                 )
                 loss = -px.log_prob(counts).sum(1).mean()
-                if not self.encoder.encoder_kwargs["batch_norm"]:
+                if not self.encoder.uses_batch_norm:
                     return loss
                 else:
                     return loss, (enc_updates, dec_updates)
@@ -113,7 +113,7 @@ class CountsAE:
                 decoder_state.params,
                 counts,
             )
-            if not self.encoder.encoder_kwargs["batch_norm"]:
+            if not (self.encoder.uses_batch_norm or self.decoder.uses_batch_norm):
                 # parsing step output
                 loss = loss_step
                 # applying gradients
@@ -145,8 +145,43 @@ class CountsAE:
         )
         return loss
 
-    def predict(self, counts: ArrayLike, training: bool):
-        """"""
+    def predict(self, counts: ArrayLike, training: bool) -> tuple[ArrayLike, ArrayLike]:
+        """Predicts the mean and dispersion parameters for the Negative Binomial noise model
+        Parameters
+        ----------
+            counts
+                Raw RNA count data of shape ``[batch, self.encoder.input_dim]``.
+            training
+                If :obj:`True`, enables dropout for training.
+
+        Returns
+        -------
+            Mean and inverse dispersion parameters for the noise model, 
+            respectively of shape ``[batch, self.encoder.input_dim]`` and ``[1, self.encoder.input_dim]`` 
+            (or ``[self.encoder.n_cat, self.encoder_input_dim]`` if `self.encoder.covariate_specific_theta == True`).
+        """
+        ## computing size factor
+        size_factor = jnp.sum(counts, axis=1, keepdims=True)
+        ## forward pass on the encoder
+        z = self.encode(counts, training)
+        ## forward pass on the decoder
+        x_hat = self.decode(z, size_factor, training=training)
+        return x_hat, self.decoder_state.params["theta"]
+
+    def encode(self, counts: ArrayLike, training: bool) -> ArrayLike:
+        """Forward pass through the encoder
+        Parameters
+        ----------
+            counts
+                Raw RNA count data of shape ``[batch, self.encoder.input_dim]``.
+            training
+                If :obj:`True`, enables dropout for training.
+
+        Returns
+        -------
+            Latent representation of RNA expression counts of shape ``[batch, self.encoder.latent_dim]``.
+        """
+        ## computing size factor and normalizing expressions
         size_factor = jnp.sum(counts, axis=1, keepdims=True)
         normalized_counts = normalize_expression(
             counts, size_factor, self.normalization_type
@@ -154,21 +189,41 @@ class CountsAE:
         ## defining the parameter dictionaries for encoder and decoder blocks
         ## we need to modify it later in case we are using batch normalization
         encoder_params_dict = {"params": self.encoder_state.params}
-        decoder_params_dict = {"params": self.decoder_state.params}
-        ## updating the encoder and decoder parameters in case of batch normalization
-        if self.encoder.encoder_kwargs["batch_norm"]:
+        ## updating the encoder parameters in case of batch normalization
+        if self.encoder.uses_batch_norm:
             encoder_params_dict["batch_stats"] = self.encoder_state.batch_stats
-        if self.decoder.encoder_kwargs["batch_norm"]:
-            decoder_params_dict["batch_stats"] = self.decoder_state.batch_stats
         ## forward pass on the encoder
         z = self.encoder_state.apply_fn(
             encoder_params_dict, normalized_counts, training=training
         )
+        return z
+    
+    def decode(self, z: ArrayLike, size_factor: ArrayLike, training: bool) -> ArrayLike:
+        """Forward pass through the decoder.
+        Parameters
+        ----------
+            z
+                Latent states of shape ``[batch, self.latent_dim]``.
+            size_factor
+                Size factor for each cell of shape ``[batch, self.input_dim]``.
+            training
+                If :obj:`True`, enables dropout for training.
+
+        Returns
+        -------
+            The mean of the Negative Binomial noise model for RNA expression counts ``[batch, self.latent_dim]``.
+        """
+        ## defining the parameter dictionaries for encoder and decoder blocks
+        ## we need to modify it later in case we are using batch normalization
+        decoder_params_dict = {"params": self.decoder_state.params}
+        ## updating the decoder parameters in case of batch normalization
+        if self.decoder.uses_batch_norm:
+            decoder_params_dict["batch_stats"] = self.decoder_state.batch_stats
         ## forward pass on the decoder
         x_hat = self.decoder_state.apply_fn(
             decoder_params_dict, z, size_factor, training=training
         )
-        return x_hat, self.decoder_state.params["theta"]
+        return x_hat
 
     @property
     def is_trained(self) -> bool:

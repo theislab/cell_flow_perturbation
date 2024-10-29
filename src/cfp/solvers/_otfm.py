@@ -9,8 +9,10 @@ from flax.training import train_state
 from ott.neural.methods.flows import dynamics
 from ott.solvers import utils as solver_utils
 
+from cfp._logging import logger
 from cfp._types import ArrayLike
 from cfp.networks._velocity_field import ConditionalVelocityField
+from cfp.networks._cfgen import CountsAE
 
 __all__ = ["OTFlowMatching"]
 
@@ -48,16 +50,30 @@ class OTFlowMatching:
         time_sampler: Callable[
             [jax.Array, int], jnp.ndarray
         ] = solver_utils.uniform_sampler,
+        flow_on_latent_space: bool = False,
+        counts_ae: CountsAE | None = None,
         **kwargs: Any,
     ):
         self._is_trained: bool = False
         self.vf = vf
         self.flow = flow
         self.time_sampler = time_sampler
+        self.flow_on_latent_space = flow_on_latent_space
+        self.counts_ae = counts_ae
         self.match_fn = jax.jit(match_fn)
 
+        input_dim = self.vf.output_dims[-1]
+        if self.flow_on_latent_space:
+            assert self.counts_ae is not None, f"With {self.flow_on_latent_space=} you need to pass a pretrained `CountsAE` object as well."
+            input_dim = self.counts_ae.encoder.latent_dim
+        else:
+            if self.counts_ae is not None:
+                logger.warning(
+                    f"You passed {self.flow_on_latent_space=}, but `self.counts_ae` is initialized as well. Computing flow on PCA space  by default."
+                )
+
         self.vf_state = self.vf.create_train_state(
-            input_dim=self.vf.output_dims[-1], **kwargs
+            input_dim=input_dim, **kwargs
         )
         self.vf_step_fn = self._get_vf_step_fn()
 
@@ -81,6 +97,11 @@ class OTFlowMatching:
                 rng: jax.Array,
             ) -> jnp.ndarray | tuple[jnp.array, dict[str, Any]]:
                 rng_flow, rng_dropout = jax.random.split(rng, 2)
+                ## optional encoding of the cell data
+                if self.flow_on_latent_space:
+                    source = self.counts_ae.encode(source, False)
+                    target = self.counts_ae.encode(target, False)
+                ## computing the flow
                 x_t = self.flow.compute_xt(rng_flow, t, source, target)
                 # setting the state dictionary in case batch norm is used
                 mutable = False

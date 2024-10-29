@@ -12,9 +12,11 @@ from ott.neural.methods.flows import dynamics
 from ott.neural.networks import velocity_field
 from ott.solvers import utils as solver_utils
 
+from cfp._logging import logger
 from cfp._constants import GENOT_CELL_KEY
 from cfp._distributions import _multivariate_normal
 from cfp._types import ArrayLike
+from cfp.networks._cfgen import CountsAE
 
 __all__ = ["GENOT"]
 
@@ -71,6 +73,8 @@ class GENOT:
         latent_noise_fn: (
             Callable[[jax.Array, tuple[int, ...]], jnp.ndarray] | None
         ) = None,
+        flow_on_latent_space: bool = False,
+        counts_ae: CountsAE | None = None,
         **kwargs: Any,
     ):
         self._is_trained: bool = False
@@ -82,6 +86,8 @@ class GENOT:
         if latent_noise_fn is None:
             latent_noise_fn = functools.partial(_multivariate_normal, dim=target_dim)
         self.latent_noise_fn = latent_noise_fn
+        self.flow_on_latent_space = flow_on_latent_space
+        self.counts_ae = counts_ae
 
         self.vf_state = self.vf.create_train_state(
             input_dim=target_dim,
@@ -89,6 +95,14 @@ class GENOT:
             **kwargs,
         )
         self.vf_step_fn = self._get_vf_step_fn()
+
+        if self.flow_on_latent_space:
+            assert self.counts_ae is not None, f"With {self.flow_on_latent_space=} you need to pass a pretrained `CountsAE` object as well."
+        else:
+            if self.counts_ae is not None:
+                logger.warning(
+                    f"You passed {self.flow_on_latent_space=}, but `self.counts_ae` is initialized as well. Computing flow on PCA space  by default."
+                )
 
     def _get_vf_step_fn(self) -> Callable:  #  type: ignore[type-arg]
 

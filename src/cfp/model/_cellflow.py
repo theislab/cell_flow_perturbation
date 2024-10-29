@@ -21,9 +21,9 @@ from cfp._types import Layers_separate_input_t, Layers_t
 from cfp.data._data import ConditionData, ValidationData
 from cfp.data._dataloader import PredictionSampler, TrainSampler, ValidationSampler
 from cfp.data._datamanager import DataManager
-from cfp.model._cfgen import CountsAE
 from cfp.model._utils import _write_predictions
 from cfp.networks._cfgen_ae import CountsDecoder, CountsEncoder
+from cfp.networks._cfgen import CountsAE
 from cfp.networks._velocity_field import ConditionalVelocityField
 from cfp.plotting import _utils
 from cfp.solvers import _genot, _otfm
@@ -286,11 +286,12 @@ class CellFlow:
         linear_projection_before_concatenation: bool = False,
         genot_source_layers: Layers_t | None = None,
         seed=0,
-        ae: Literal["mlp", "cfgen"] = "mlp",
+        ae: Literal["mlp", "counts_ae"] = "mlp",
         cfgen_kwargs: dict[str, Any] | None = None,
         normalization_type: Literal[
             "none", "proportions", "log_gexp", "log_gexp_scaled"
         ] = "none",
+        flow_on_latent_space: bool = False
     ) -> None:
         """Prepare the model for training.
 
@@ -458,10 +459,10 @@ class CellFlow:
 
         ## preparing cfgen models
         cfgen_encoder = cfgen_decoder = None
-        if ae == "cfgen":
+        if ae == "counts_ae":
             cfgen_encoder = CountsEncoder(**cfgen_kwargs)
             cfgen_decoder = CountsDecoder(**cfgen_kwargs)
-            self.cfgen = CountsAE(
+            self._cfgen = CountsAE(
                 cfgen_encoder,
                 cfgen_decoder,
                 {
@@ -477,8 +478,12 @@ class CellFlow:
                 normalization_type=normalization_type,
             )
 
+        vf_out_dim = self._data_dim
+        if flow_on_latent_space:
+            vf_out_dim = self._cfgen.encoder.latent_dim
+
         self.vf = ConditionalVelocityField(
-            output_dim=self._data_dim,
+            output_dim=vf_out_dim,
             max_combination_length=self.train_data.max_combination_length,
             encode_conditions=encode_conditions,
             condition_embedding_dim=condition_embedding_dim,
@@ -502,9 +507,6 @@ class CellFlow:
             decoder_batchnorm=decoder_batchnorm,
             layer_norm_before_concatenation=layer_norm_before_concatenation,
             linear_projection_before_concatenation=linear_projection_before_concatenation,
-            ae=ae,
-            cfgen_encoder=cfgen_encoder,
-            cfgen_decoder=cfgen_decoder,
         )
 
         flow, noise = next(iter(flow.items()))
@@ -525,6 +527,8 @@ class CellFlow:
                 optimizer=optimizer,
                 conditions=self.train_data.condition_data,
                 rng=jax.random.PRNGKey(seed),
+                flow_on_latent_space=flow_on_latent_space,
+                counts_ae=self._cfgen,
                 **solver_kwargs,
             )
         elif self._solver_class == _genot.GENOT:
@@ -537,6 +541,8 @@ class CellFlow:
                 optimizer=optimizer,
                 conditions=self.train_data.condition_data,
                 rng=jax.random.PRNGKey(seed),
+                flow_on_latent_space=flow_on_latent_space,
+                counts_ae=self._cfgen,
                 **solver_kwargs,
             )
         else:
@@ -544,9 +550,9 @@ class CellFlow:
                 f"Solver must be an instance of OTFlowMatching or GENOT, got {type(self.solver)}"
             )
         self._trainer = CellFlowTrainer(solver=self.solver)  # type: ignore[arg-type]
-        if ae == "cfgen":
+        if ae == "counts_ae":
             self._cfgen_ae_trainer = CountsAETrainer(
-                self.cfgen, normalization_type=normalization_type
+                self._cfgen, normalization_type=normalization_type
             )
 
     def pretrain_cfgen_ae(

@@ -57,6 +57,11 @@ class CountsEncoder(BaseModule):
         """Returns the dimensionality of the latent space"""
         return self.encoder_kwargs["dims"][-1]
 
+    @property
+    def uses_batch_norm(self) -> bool:
+        """Whether the module is using batch normalization"""
+        return self.encoder_kwargs["batch_norm"]
+
     def create_train_state(
         self,
         rng: jax.Array,
@@ -156,6 +161,11 @@ class CountsDecoder(BaseModule):
     def latent_dim(self) -> int:
         """Returns the dimensionality of the latent space"""
         return self.encoder_kwargs["dims"][-1]
+
+    @property
+    def uses_batch_norm(self) -> bool:
+        """Whether the module is using batch normalization"""
+        return self.encoder_kwargs["batch_norm"]
 
     def create_train_state(
         self,

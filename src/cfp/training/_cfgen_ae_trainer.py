@@ -8,7 +8,7 @@ from numpy.typing import ArrayLike
 from tqdm import tqdm
 
 from cfp.data._dataloader import TrainSampler, ValidationSampler
-from cfp.model._cfgen import CountsAE
+from cfp.networks._cfgen import CountsAE
 from cfp.training._callbacks import BaseCallback, CallbackRunner
 
 
