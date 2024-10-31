@@ -12,9 +12,9 @@ from ott.neural.methods.flows import dynamics
 from ott.neural.networks import velocity_field
 from ott.solvers import utils as solver_utils
 
-from cfp._logging import logger
 from cfp._constants import GENOT_CELL_KEY
 from cfp._distributions import _multivariate_normal
+from cfp._logging import logger
 from cfp._types import ArrayLike
 from cfp.networks._cfgen import CountsAE
 
@@ -97,7 +97,9 @@ class GENOT:
         self.vf_step_fn = self._get_vf_step_fn()
 
         if self.flow_on_latent_space:
-            assert self.counts_ae is not None, f"With {self.flow_on_latent_space=} you need to pass a pretrained `CountsAE` object as well."
+            assert (
+                self.counts_ae is not None
+            ), f"With {self.flow_on_latent_space=} you need to pass a pretrained `CountsAE` object as well."
         else:
             if self.counts_ae is not None:
                 logger.warning(

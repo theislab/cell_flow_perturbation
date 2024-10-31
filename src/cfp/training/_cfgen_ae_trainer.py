@@ -3,7 +3,6 @@ from typing import Any, Literal
 
 import jax
 import numpy as np
-import jax.numpy as jnp
 from numpy.typing import ArrayLike
 from tqdm import tqdm
 
@@ -59,7 +58,7 @@ class CountsAETrainer:
         valid_pred_data: dict[str, dict[str, ArrayLike]] = {}
         valid_true_data: dict[str, dict[str, ArrayLike]] = {}
         for val_key, vdl in val_data.items():
-            batch = vdl.sample(rng)        
+            batch = vdl.sample(rng)
             counts = batch["counts"]
             valid_pred_data[val_key] = jax.tree.map(self.cfgen.predict, counts, False)
             valid_true_data[val_key] = counts

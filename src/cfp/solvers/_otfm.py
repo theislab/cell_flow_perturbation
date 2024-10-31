@@ -11,8 +11,8 @@ from ott.solvers import utils as solver_utils
 
 from cfp._logging import logger
 from cfp._types import ArrayLike
-from cfp.networks._velocity_field import ConditionalVelocityField
 from cfp.networks._cfgen import CountsAE
+from cfp.networks._velocity_field import ConditionalVelocityField
 
 __all__ = ["OTFlowMatching"]
 
@@ -64,7 +64,9 @@ class OTFlowMatching:
 
         input_dim = self.vf.output_dims[-1]
         if self.flow_on_latent_space:
-            assert self.counts_ae is not None, f"With {self.flow_on_latent_space=} you need to pass a pretrained `CountsAE` object as well."
+            assert (
+                self.counts_ae is not None
+            ), f"With {self.flow_on_latent_space=} you need to pass a pretrained `CountsAE` object as well."
             input_dim = self.counts_ae.encoder.latent_dim
         else:
             if self.counts_ae is not None:
@@ -72,9 +74,7 @@ class OTFlowMatching:
                     f"You passed {self.flow_on_latent_space=}, but `self.counts_ae` is initialized as well. Computing flow on PCA space  by default."
                 )
 
-        self.vf_state = self.vf.create_train_state(
-            input_dim=input_dim, **kwargs
-        )
+        self.vf_state = self.vf.create_train_state(input_dim=input_dim, **kwargs)
         self.vf_step_fn = self._get_vf_step_fn()
 
     def _get_vf_step_fn(self) -> Callable:  # type: ignore[type-arg]

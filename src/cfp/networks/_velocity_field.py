@@ -13,7 +13,6 @@ from cfp._batchnorm import BNTrainState
 from cfp._constants import GENOT_CELL_KEY
 from cfp._logging import logger
 from cfp._types import Layers_separate_input_t, Layers_t
-from cfp.networks._cfgen_ae import CountsDecoder, CountsEncoder
 from cfp.networks._set_encoders import ConditionEncoder, MLPBlock
 
 __all__ = ["ConditionalVelocityField"]

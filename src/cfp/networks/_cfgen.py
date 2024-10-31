@@ -162,6 +162,7 @@ class CountsAE:
 
     def predict(self, counts: ArrayLike, training: bool) -> tuple[ArrayLike, ArrayLike]:
         """Predicts the mean and dispersion parameters for the Negative Binomial noise model
+
         Parameters
         ----------
             counts
@@ -171,8 +172,8 @@ class CountsAE:
 
         Returns
         -------
-            Mean and inverse dispersion parameters for the noise model, 
-            respectively of shape ``[batch, self.encoder.input_dim]`` and ``[1, self.encoder.input_dim]`` 
+            Mean and inverse dispersion parameters for the noise model,
+            respectively of shape ``[batch, self.encoder.input_dim]`` and ``[1, self.encoder.input_dim]``
             (or ``[self.encoder.n_cat, self.encoder_input_dim]`` if `self.encoder.covariate_specific_theta == True`).
         """
         ## computing size factor
@@ -185,6 +186,7 @@ class CountsAE:
 
     def encode(self, counts: ArrayLike, training: bool) -> ArrayLike:
         """Forward pass through the encoder
+
         Parameters
         ----------
             counts
@@ -212,9 +214,10 @@ class CountsAE:
             encoder_params_dict, normalized_counts, training=training
         )
         return z
-    
+
     def decode(self, z: ArrayLike, size_factor: ArrayLike, training: bool) -> ArrayLike:
         """Forward pass through the decoder.
+
         Parameters
         ----------
             z

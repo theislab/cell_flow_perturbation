@@ -8,8 +8,8 @@ from cfp.training._callbacks import (
                                      VAEDecodedMetrics,
                                      WandbLogger,
 )
-from cfp.training._trainer import CellFlowTrainer
 from cfp.training._cfgen_ae_trainer import CountsAETrainer
+from cfp.training._trainer import CellFlowTrainer
 
 __all__ = [
     "CellFlowTrainer",

@@ -49,6 +49,7 @@ class CountsEncoder(BaseModule):
 
     def __call__(self, X: jnp.ndarray, training: bool = True) -> jnp.ndarray:
         """Forward pass through the encoder.
+
         Parameters
         ----------
             x
@@ -163,6 +164,7 @@ class CountsDecoder(BaseModule):
         self, z: jnp.ndarray, size_factor: jnp.ndarray, training: bool = True
     ) -> dict[str, jnp.ndarray]:
         """Forward pass through the decoder.
+
         Parameters
         ----------
             z

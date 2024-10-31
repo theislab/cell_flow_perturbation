@@ -22,8 +22,8 @@ from cfp.data._data import ConditionData, ValidationData
 from cfp.data._dataloader import PredictionSampler, TrainSampler, ValidationSampler
 from cfp.data._datamanager import DataManager
 from cfp.model._utils import _write_predictions
-from cfp.networks._cfgen_ae import CountsDecoder, CountsEncoder
 from cfp.networks._cfgen import CountsAE
+from cfp.networks._cfgen_ae import CountsDecoder, CountsEncoder
 from cfp.networks._velocity_field import ConditionalVelocityField
 from cfp.plotting import _utils
 from cfp.solvers import _genot, _otfm
@@ -291,7 +291,7 @@ class CellFlow:
         normalization_type: Literal[
             "none", "proportions", "log_gexp", "log_gexp_scaled"
         ] = "none",
-        flow_on_latent_space: bool = False
+        flow_on_latent_space: bool = False,
     ) -> None:
         """Prepare the model for training.
 

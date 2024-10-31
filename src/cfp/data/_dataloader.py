@@ -22,7 +22,9 @@ class TrainSampler:
 
     """
 
-    def __init__(self, data: TrainingData, batch_size: int = 1024, return_pairs: bool = True):
+    def __init__(
+        self, data: TrainingData, batch_size: int = 1024, return_pairs: bool = True
+    ):
         self._data = data
         self._return_pairs = return_pairs
         self._data_idcs = jnp.arange(data.cell_data.shape[0])
@@ -78,7 +80,7 @@ class TrainSampler:
                     "condition": condition_batch,
                 }
             else:
-                counts = jnp.concatenate([source_batch, target_batch], axis = 0)
+                counts = jnp.concatenate([source_batch, target_batch], axis=0)
                 counts = jax.random.choice(rng_5, counts, shape=(self.batch_size,))
                 return {"counts": counts}
 

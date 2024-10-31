@@ -1,5 +1,5 @@
-from cfp.networks._cfgen_ae import CountsDecoder, CountsEncoder
 from cfp.networks._cfgen import CountsAE
+from cfp.networks._cfgen_ae import CountsDecoder, CountsEncoder
 from cfp.networks._set_encoders import (
                                         ConditionEncoder,
                                         MLPBlock,
