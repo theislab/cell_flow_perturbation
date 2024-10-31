@@ -496,12 +496,12 @@ class DataManager:
                 return jnp.asarray(sample_rep.toarray())
             else:
                 return jnp.asarray(sample_rep)
-        if isinstance(self._sample_rep, str):
-            if self._sample_rep not in adata.obsm:
+        if isinstance(sample_rep, str):
+            if sample_rep not in adata.obsm:
                 raise KeyError(
-                    f"Sample representation '{self._sample_rep}' not found in `adata.obsm`."
+                    f"Sample representation '{sample_rep}' not found in `adata.obsm`."
                 )
-            return jnp.asarray(adata.obsm[self._sample_rep])
+            return jnp.asarray(adata.obsm[sample_rep])
         attr, key = next(iter(sample_rep.items()))  # type: ignore[union-attr]
         return jnp.asarray(getattr(adata, attr)[key])
 
