@@ -73,7 +73,7 @@ def plot_condition_embedding(
     elif embedding == "UMAP":
         emb = _compute_umap_from_df(df_embedding, **embedding_kwargs)
     elif embedding == "PCA":
-        emb = _compute_pca_from_df(df_embedding)
+        emb = _compute_pca_from_df(df_embedding, **embedding_kwargs)
     elif embedding == "Kernel_PCA":
         emb = _compute_kernel_pca_from_df(df_embedding)
     else:
