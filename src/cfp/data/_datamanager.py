@@ -127,6 +127,7 @@ class DataManager:
         perturb_covar_keys = _flatten_list(
             self._perturbation_covariates.values()
         ) + list(self._sample_covariates)
+        perturb_covar_keys += [col for col in self._split_covariates if col not in perturb_covar_keys]
         self._perturb_covar_keys = [k for k in perturb_covar_keys if k is not None]
 
     def get_train_data(self, adata: anndata.AnnData) -> Any:
