@@ -13,13 +13,7 @@ from tqdm import tqdm
 
 from cfp._logging import logger
 from cfp._types import ArrayLike
-from cfp.data._data import (
-    ConditionData,
-    PredictionData,
-    ReturnData,
-    TrainingData,
-    ValidationData,
-)
+from cfp.data._data import ConditionData, PredictionData, ReturnData, TrainingData, ValidationData
 
 from ._utils import _flatten_list, _to_list
 
@@ -133,7 +127,9 @@ class DataManager:
         perturb_covar_keys = _flatten_list(
             self._perturbation_covariates.values()
         ) + list(self._sample_covariates)
-        perturb_covar_keys += [col for col in self._split_covariates if col not in perturb_covar_keys]
+        perturb_covar_keys += [
+            col for col in self._split_covariates if col not in perturb_covar_keys
+        ]
         self._perturb_covar_keys = [k for k in perturb_covar_keys if k is not None]
 
     def get_train_data(self, adata: anndata.AnnData) -> Any:
@@ -148,7 +144,7 @@ class DataManager:
         -------
         Training data for the model.
         """
-        cond_data = self._get_condition_data(adata)
+        cond_data = self._get_condition_data(adata.obs, adata=adata)
         cell_data = self._get_cell_data(adata)
         return TrainingData(
             cell_data=cell_data,
@@ -185,7 +181,7 @@ class DataManager:
         -------
         Validation data for the model.
         """
-        cond_data = self._get_condition_data(adata)
+        cond_data = self._get_condition_data(adata.obs, adata)
         cell_data = self._get_cell_data(adata)
         return ValidationData(
             cell_data=cell_data,
@@ -239,21 +235,21 @@ class DataManager:
 
         # adata is None since we don't extract cell masks for predicted covariates
         cond_data = self._get_condition_data(
-            adata=None,
             covariate_data=covariate_data,
+            adata=adata,
             rep_dict=adata.uns if rep_dict is None else rep_dict,
             condition_id_key=condition_id_key,
         )
 
         cell_data = self._get_cell_data(adata, sample_rep)
-        split_covariates_mask, split_idx_to_covariates = (
-            self._get_split_covariates_mask(adata)
-        )
+        # split_covariates_mask, split_idx_to_covariates = (
+        #    self._get_split_covariates_mask(adata)
+        # )
 
         return PredictionData(
             cell_data=cell_data,
-            split_covariates_mask=split_covariates_mask,
-            split_idx_to_covariates=split_idx_to_covariates,
+            split_covariates_mask=cond_data.split_covariates_mask,
+            split_idx_to_covariates=cond_data.split_idx_to_covariates,
             condition_data=cond_data.condition_data,
             control_to_perturbation=cond_data.control_to_perturbation,
             perturbation_idx_to_covariates=cond_data.perturbation_idx_to_covariates,
@@ -284,8 +280,8 @@ class DataManager:
         """
         self._verify_covariate_data(covariate_data, self._perturb_covar_keys)
         cond_data = self._get_condition_data(
-            adata=None,
             covariate_data=covariate_data,
+            adata=None,
             rep_dict=rep_dict,
             condition_id_key=condition_id_key,
         )
@@ -300,8 +296,8 @@ class DataManager:
 
     def _get_condition_data(
         self,
+        covariate_data: pd.DataFrame,
         adata: anndata.AnnData | None,
-        covariate_data: pd.DataFrame | None = None,
         rep_dict: dict[str, Any] | None = None,
         condition_id_key: str | None = None,
     ) -> ReturnData:
@@ -309,7 +305,6 @@ class DataManager:
         # for training/validation: adata is provided and used to get cell masks, covariate_data is None
         if adata is None and covariate_data is None:
             raise ValueError("Either `adata` or `covariate_data` must be provided.")
-        covariate_data = covariate_data if covariate_data is not None else adata.obs  # type: ignore[union-attr]
         if rep_dict is None:
             rep_dict = adata.uns if adata is not None else {}
         # check if all perturbation/split covariates and control cells are present in the input
@@ -347,14 +342,14 @@ class DataManager:
         )
 
         # intialize data containers
-        if adata is not None:
-            split_covariates_mask = np.full((len(adata),), -1, dtype=jnp.int32)
-            perturbation_covariates_mask = np.full((len(adata),), -1, dtype=jnp.int32)
-            control_mask = covariate_data[self._control_key]
-        else:
+        if adata is None:
             split_covariates_mask = None
             perturbation_covariates_mask = None
             control_mask = jnp.ones((len(covariate_data),))
+        else:
+            split_covariates_mask = np.full((len(adata),), -1, dtype=jnp.int32)
+            perturbation_covariates_mask = np.full((len(adata),), -1, dtype=jnp.int32)
+            control_mask = covariate_data[self._control_key]
 
         condition_data: dict[str, list[jnp.ndarray]] = (
             {i: [] for i in self._covar_to_idx.keys()} if self.is_conditional else {}
@@ -382,7 +377,7 @@ class DataManager:
             if adata is not None:
                 split_covariates_mask, split_idx_to_covariates, split_cov_mask = (
                     self._get_split_combination_mask(
-                        covariate_data=adata.obs,
+                        covariate_data=covariate_data,
                         split_covariates_mask=split_covariates_mask,  # type: ignore[arg-type]
                         split_combination=split_combination,
                         split_idx_to_covariates=split_idx_to_covariates,
@@ -390,6 +385,7 @@ class DataManager:
                         src_counter=src_counter,
                     )
                 )
+
             conditional_distributions = []
 
             # iterate over target conditions

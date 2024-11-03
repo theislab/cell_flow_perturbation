@@ -8,12 +8,7 @@ import jax.tree_util as jtu
 import numpy as np
 from numpy.typing import ArrayLike
 
-from cfp.metrics._metrics import (
-    compute_e_distance,
-    compute_r_squared,
-    compute_scalar_mmd,
-    compute_sinkhorn_div,
-)
+from cfp.metrics._metrics import compute_e_distance, compute_r_squared, compute_scalar_mmd, compute_sinkhorn_div
 
 __all__ = [
     "BaseCallback",
@@ -336,9 +331,10 @@ class VAEDecodedMetrics(Metrics):
         return metrics
 
     def _create_anndata(self, data: ArrayLike) -> ad.AnnData:
-    
+
         adata = ad.AnnData(
-            X=np.empty((len(data), self._adata_n_vars)), obs=self._adata_obs[:len(data)]
+            X=np.empty((len(data), self._adata_n_vars)),
+            obs=self._adata_obs[: len(data)],
         )
         adata.obsm["X_scVI"] = data  # TODO: make package constant
         return adata
