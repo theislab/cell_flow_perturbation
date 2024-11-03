@@ -239,6 +239,7 @@ class DataManager:
             adata=adata,
             rep_dict=adata.uns if rep_dict is None else rep_dict,
             condition_id_key=condition_id_key,
+            for_prediction_data=True,
         )
 
         cell_data = self._get_cell_data(adata, sample_rep)
@@ -300,6 +301,8 @@ class DataManager:
         adata: anndata.AnnData | None,
         rep_dict: dict[str, Any] | None = None,
         condition_id_key: str | None = None,
+        *,
+        for_prediction_data: bool = False,
     ) -> ReturnData:
         # for prediction: adata is None, covariate_data is provided
         # for training/validation: adata is provided and used to get cell masks, covariate_data is None
@@ -347,8 +350,14 @@ class DataManager:
             perturbation_covariates_mask = None
             control_mask = jnp.ones((len(covariate_data),))
         else:
-            split_covariates_mask = np.full((len(adata),), -1, dtype=jnp.int32)
-            perturbation_covariates_mask = np.full((len(adata),), -1, dtype=jnp.int32)
+            if for_prediction_data:
+                split_covariates_mask = np.full((len(covariate_data),), -1, dtype=jnp.int32)
+                perturbation_covariates_mask = np.full((len(covariate_data),), -1, dtype=jnp.int32)
+            else:
+                split_covariates_mask = np.full((len(adata),), -1, dtype=jnp.int32)
+                perturbation_covariates_mask = np.full((len(adata),), -1, dtype=jnp.int32)
+            
+            
             control_mask = covariate_data[self._control_key]
 
         condition_data: dict[str, list[jnp.ndarray]] = (
@@ -560,6 +569,10 @@ class DataManager:
             covariate_data[list(filter_dict.keys())] == list(filter_dict.values())
         ).all(axis=1)
         mask = jnp.array(control_mask * split_cov_mask).astype(bool)
+        print("shape of mask is "    ,mask.shape)
+        print("shape of split_covariates_mask is "    ,split_covariates_mask.shape)
+        print("shape of control mask is "    ,control_mask.shape)
+        print("shape of split_cov_mask is "    ,split_cov_mask.shape)
         split_covariates_mask[mask] = src_counter
         split_idx_to_covariates[src_counter] = tuple(split_combination)
         return split_covariates_mask, split_idx_to_covariates, split_cov_mask
