@@ -36,6 +36,11 @@ class OTFlowMatching:
         time_sampler
             Time sampler with a ``(rng, n_samples) -> time`` signature, see e.g.
             :func:`ott.solvers.utils.uniform_sampler`.
+        cfg_p_resample
+            Probability of the null condition for classifier free guidance.
+        cfg_ode_weight
+            Weighting factor of the null condition for classifier free guidance.
+            0 corresponds to no classifier-free guidance, the larger 0, the more guidance.
         kwargs
             Keyword arguments for :meth:`cfp.networks.ConditionalVelocityField.create_train_state`.
     """
@@ -48,12 +53,26 @@ class OTFlowMatching:
         time_sampler: Callable[
             [jax.Array, int], jnp.ndarray
         ] = solver_utils.uniform_sampler,
+        cfg_p_resample: float = 0.0,
+        cfg_ode_weight: float = 0.0,
         **kwargs: Any,
     ):
         self._is_trained: bool = False
         self.vf = vf
         self.flow = flow
         self.time_sampler = time_sampler
+        if cfg_p_resample > 0 and cfg_ode_weight == 0:
+            raise ValueError(
+                "cfg_p_resample > 0 requires cfg_ode_weight > 0 for classifier free guidance."
+            )
+        if cfg_p_resample == 0 and cfg_ode_weight > 0:
+            raise ValueError(
+                "cfg_ode_weight > 0 requires cfg_p_resample > 0 for classifier free guidance."
+            )
+        if cfg_ode_weight < 0:
+            raise ValueError("cfg_ode_weight must be non-negative.")
+        self.cfg_p_resample = cfg_p_resample
+        self.cfg_ode_weight = cfg_ode_weight
         self.match_fn = jax.jit(match_fn)
 
         self.vf_state = self.vf.create_train_state(
@@ -125,7 +144,12 @@ class OTFlowMatching:
         """
         src, tgt = batch["src_cell_data"], batch["tgt_cell_data"]
         condition = batch.get("condition")
-        rng_resample, rng_step_fn = jax.random.split(rng, 2)
+        rng_resample, rng_cfg, rng_step_fn = jax.random.split(rng, 3)
+        cfg_null = jax.random.bernoulli(rng_cfg, self.cfg_p_resample)
+        if cfg_null:
+            # TODO: adapt to null condition in transformer
+            condition = jax.tree_util.tree_map(lambda x: jnp.zeros_like(x), condition)
+
         if self.match_fn is not None:
             tmat = self.match_fn(src, tgt)
             src_ixs, tgt_ixs = solver_utils.sample_joint(rng_resample, tmat)
@@ -192,8 +216,18 @@ class OTFlowMatching:
             params = self.vf_state.params
             return self.vf_state.apply_fn({"params": params}, t, x, cond, train=False)
 
+        def vf_cfg(
+            t: jnp.ndarray, x: jnp.ndarray, cond: dict[str, jnp.ndarray] | None
+        ) -> jnp.ndarray:
+            # TODO: adapt to null condition in transformer
+            null_cond = jax.tree_util.tree_map(lambda x: jnp.zeros_like(x), cond)
+            params = self.vf_state.params
+            v_cond = self.vf_state.apply_fn({"params": params}, t, x, cond)
+            v_uncond = self.vf_state.apply_fn({"params": params}, t, x, null_cond)
+            return (1 + self.cfg_ode_weight) * v_cond - self.cfg_ode_weight * v_uncond
+
         def solve_ode(x: jnp.ndarray, condition: jnp.ndarray | None) -> jnp.ndarray:
-            ode_term = diffrax.ODETerm(vf)
+            ode_term = diffrax.ODETerm(vf_cfg if self.cfg_p_resample else vf)
             result = diffrax.diffeqsolve(
                 ode_term,
                 t0=0.0,
