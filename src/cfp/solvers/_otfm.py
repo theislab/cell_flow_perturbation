@@ -209,6 +209,8 @@ class OTFlowMatching:
         kwargs.setdefault(
             "stepsize_controller", diffrax.PIDController(rtol=1e-5, atol=1e-5)
         )
+        null_cond = jax.tree_util.tree_map(lambda x: jnp.zeros_like(x), condition)
+            
 
         def vf(
             t: jnp.ndarray, x: jnp.ndarray, cond: dict[str, jnp.ndarray] | None
@@ -220,7 +222,6 @@ class OTFlowMatching:
             t: jnp.ndarray, x: jnp.ndarray, cond: dict[str, jnp.ndarray] | None
         ) -> jnp.ndarray:
             # TODO: adapt to null condition in transformer
-            null_cond = jax.tree_util.tree_map(lambda x: jnp.zeros_like(x), cond)
             params = self.vf_state.params
             v_cond = self.vf_state.apply_fn({"params": params}, t, x, cond)
             v_uncond = self.vf_state.apply_fn({"params": params}, t, x, null_cond)
