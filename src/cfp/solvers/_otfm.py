@@ -221,9 +221,9 @@ class OTFlowMatching:
         def vf_cfg(
             t: jnp.ndarray, x: jnp.ndarray, cond: dict[str, jnp.ndarray] | None
         ) -> jnp.ndarray:
-            cond = jax.tree_util.tree_map(lambda x: jnp.ones_like(x), cond)
+            cond_mask = jax.tree_util.tree_map(lambda x: jnp.ones_like(x), cond)
             params = self.vf_state.params
-            return (1 + self.cfg_ode_weight) * self.vf_state.apply_fn({"params": params}, t, x, cond, train=False)
+            return (1 + self.cfg_ode_weight) * self.vf_state.apply_fn({"params": params}, t, x, cond, train=False) - self.cfg_ode_weight * (1 + self.cfg_ode_weight) * self.vf_state.apply_fn({"params": params}, t, x, cond_mask, train=False)
 
             # TODO: adapt to null condition in transformer
             #params = self.vf_state.params
