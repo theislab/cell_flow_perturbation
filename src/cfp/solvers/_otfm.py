@@ -148,7 +148,7 @@ class OTFlowMatching:
         cfg_null = jax.random.bernoulli(rng_cfg, self.cfg_p_resample)
         if cfg_null:
             # TODO: adapt to null condition in transformer
-            condition = jax.tree_util.tree_map(lambda x: jnp.zeros_like(x), condition)
+            condition = jax.tree_util.tree_map(lambda x: jnp.ones_like(x), condition)
 
         if self.match_fn is not None:
             tmat = self.match_fn(src, tgt)
@@ -209,7 +209,7 @@ class OTFlowMatching:
         kwargs.setdefault(
             "stepsize_controller", diffrax.PIDController(rtol=1e-5, atol=1e-5)
         )
-        null_cond = jax.tree_util.tree_map(lambda x: jnp.zeros_like(x), condition)
+        null_cond = jax.tree_util.tree_map(lambda x: jnp.ones_like(x), condition)
             
 
         def vf(
