@@ -148,7 +148,7 @@ class OTFlowMatching:
         cfg_null = jax.random.bernoulli(rng_cfg, self.cfg_p_resample)
         if cfg_null:
             # TODO: adapt to null condition in transformer
-            condition = jax.tree_util.tree_map(lambda x: jnp.ones_like(x), condition)
+            condition = jax.tree_util.tree_map(lambda x: jnp.zeros_like(x), condition)
 
         if self.match_fn is not None:
             tmat = self.match_fn(src, tgt)
@@ -219,7 +219,7 @@ class OTFlowMatching:
         def vf_cfg(
             t: jnp.ndarray, x: jnp.ndarray, cond: dict[str, jnp.ndarray] | None
         ) -> jnp.ndarray:
-            cond_mask = jax.tree_util.tree_map(lambda x: jnp.ones_like(x), cond)
+            cond_mask = jax.tree_util.tree_map(lambda x: jnp.zeros_like(x), cond)
             params = self.vf_state.params
             return (1 + self.cfg_ode_weight) * self.vf_state.apply_fn({"params": params}, t, x, cond, train=False) - self.cfg_ode_weight * self.vf_state.apply_fn({"params": params}, t, x, cond_mask, train=False)
 
