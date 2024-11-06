@@ -215,6 +215,7 @@ class OTFlowMatching:
         def vf(
             t: jnp.ndarray, x: jnp.ndarray, cond: dict[str, jnp.ndarray] | None
         ) -> jnp.ndarray:
+            cond = jax.tree_util.tree_map(lambda x: jnp.ones_like(x), cond)
             params = self.vf_state.params
             return self.vf_state.apply_fn({"params": params}, t, x, cond, train=False)
 
