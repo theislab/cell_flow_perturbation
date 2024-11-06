@@ -221,11 +221,14 @@ class OTFlowMatching:
         def vf_cfg(
             t: jnp.ndarray, x: jnp.ndarray, cond: dict[str, jnp.ndarray] | None
         ) -> jnp.ndarray:
-            # TODO: adapt to null condition in transformer
             params = self.vf_state.params
-            v_cond = self.vf_state.apply_fn({"params": params}, t, x, cond)
-            v_uncond = self.vf_state.apply_fn({"params": params}, t, x, null_cond)
-            return (1 + self.cfg_ode_weight) * v_cond - self.cfg_ode_weight * v_uncond
+            return self.vf_state.apply_fn({"params": params}, t, x, cond, train=False)
+
+            # TODO: adapt to null condition in transformer
+            #params = self.vf_state.params
+            #v_cond = self.vf_state.apply_fn({"params": params}, t, x, cond)
+            #v_uncond = self.vf_state.apply_fn({"params": params}, t, x, null_cond)
+            #return (1 + self.cfg_ode_weight) * v_cond - self.cfg_ode_weight * v_uncond
 
         def solve_ode(x: jnp.ndarray, condition: jnp.ndarray | None) -> jnp.ndarray:
             ode_term = diffrax.ODETerm(vf_cfg if self.cfg_p_resample else vf)
