@@ -149,7 +149,9 @@ class OTFlowMatching:
         cfg_null = jax.random.bernoulli(rng_cfg, self.cfg_p_resample)
         if cfg_null:
             # TODO: adapt to null condition in transformer
-            condition = jax.tree_util.tree_map(lambda x: jnp.full(x.shape, self.null_value_cfg), condition)
+            condition = jax.tree_util.tree_map(
+                lambda x: jnp.full(x.shape, self.null_value_cfg), condition
+            )
 
         if self.match_fn is not None:
             tmat = self.match_fn(src, tgt)
@@ -210,7 +212,7 @@ class OTFlowMatching:
         kwargs.setdefault(
             "stepsize_controller", diffrax.PIDController(rtol=1e-5, atol=1e-5)
         )
-            
+
         def vf(
             t: jnp.ndarray, x: jnp.ndarray, cond: dict[str, jnp.ndarray] | None
         ) -> jnp.ndarray:
@@ -220,9 +222,15 @@ class OTFlowMatching:
         def vf_cfg(
             t: jnp.ndarray, x: jnp.ndarray, cond: dict[str, jnp.ndarray] | None
         ) -> jnp.ndarray:
-            cond_mask = jax.tree_util.tree_map(lambda x: jnp.full(x.shape, self.null_value_cfg), cond)
+            cond_mask = jax.tree_util.tree_map(
+                lambda x: jnp.full(x.shape, self.null_value_cfg), cond
+            )
             params = self.vf_state.params
-            return (1 + self.cfg_ode_weight) * self.vf_state.apply_fn({"params": params}, t, x, cond, train=False) - self.cfg_ode_weight * self.vf_state.apply_fn({"params": params}, t, x, cond_mask, train=False)
+            return (1 + self.cfg_ode_weight) * self.vf_state.apply_fn(
+                {"params": params}, t, x, cond, train=False
+            ) - self.cfg_ode_weight * self.vf_state.apply_fn(
+                {"params": params}, t, x, cond_mask, train=False
+            )
 
         def solve_ode(x: jnp.ndarray, condition: jnp.ndarray | None) -> jnp.ndarray:
             ode_term = diffrax.ODETerm(vf_cfg if self.cfg_p_resample else vf)
