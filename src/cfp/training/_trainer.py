@@ -117,7 +117,7 @@ class CellFlowTrainer:
             loss = self.solver.step_fn(rng_step_fn, batch)
             self.training_logs["loss"].append(float(loss))
 
-            if ((it - 1) % valid_freq == 0) and (it > 1):
+            if ((it + 1) % valid_freq == 0) and (it > 1):
                 # Get predictions from validation data
                 valid_true_data, valid_pred_data = self._validation_step(
                     valid_loaders, mode="on_log_iteration"
