@@ -75,7 +75,7 @@ def predict_with_kernel_cca(
     kernel: Literal["linear", "poly", "rbf", "sigmoid", "cosine"] | KCCA = "poly",
     kernel_kwargs: Any = types.MappingProxyType({}),
     return_all_data: bool = False,
-) -> pd.Series | pd.DataFrame:
+) -> pd.Series | tuple[pd.DataFrame, np.ndarray]:
     """Predict target variable for unseen data using canonical correlation analysis (CCA).
 
     Parameters
@@ -116,7 +116,13 @@ def predict_with_kernel_cca(
     )
     kcca.fit((X, y))
     _, y_c = kcca.transform((X, y))
-    correct_orientation = np.corrcoef((y_c.squeeze()), y.squeeze())[0, 1] > 0.0
+
+    correct_orientation = []
+    for i in range(target_variables.shape[1]):
+        correct_orientation.append(
+            np.corrcoef((y_c.squeeze()), y[:, i].squeeze())[0, 1] > 0.0
+        )
+    correct_orient = np.array([1.0 if el else -1.0 for el in correct_orientation])
 
     X_new = embeddings_unseen.values
     X -= X_mean
@@ -124,7 +130,7 @@ def predict_with_kernel_cca(
 
     projections_unseen = pd.Series(
         index=embeddings_unseen.index,
-        data=y_pred.squeeze() * (1.0 if correct_orientation else -1.0),
+        data=y_pred.squeeze(),
     )
 
     if not return_all_data:
@@ -132,12 +138,12 @@ def predict_with_kernel_cca(
 
     projections_seen = pd.Series(
         index=embeddings_seen.index,
-        data=y_c.squeeze() * (1.0 if correct_orientation else -1.0),
+        data=y_c.squeeze(),
     ).to_frame(name="latent_dim")
     projections_seen["mode"] = "seen"
     projections_unseen = projections_unseen.to_frame(name="latent_dim")
     projections_unseen["mode"] = "unseen"
-    return pd.concat((projections_seen, projections_unseen))
+    return pd.concat((projections_seen, projections_unseen)), correct_orient
 
 
 c_values = [0.5, 0.9, 0.99, 1.0]
