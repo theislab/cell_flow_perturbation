@@ -9,8 +9,6 @@ from cca_zoo.nonparametric import KCCA
 from ott.geometry import costs, pointcloud
 from ott.problems.linear import linear_problem
 from ott.solvers.linear import sinkhorn
-from sklearn.cross_decomposition import CCA
-from sklearn.decomposition import KernelPCA
 
 ScaleCost_t = float | Literal["mean", "max_cost", "median"]
 
@@ -70,58 +68,9 @@ def match_linear(
     return out.matrix
 
 
-def predict_with_cca(
-    embeddings_seen: pd.Series,
-    target_variable: pd.Series,
-    embeddings_unseen: pd.Series,
-    kernel_pca_mode: Literal["linear", "poly", "rbf", "sigmoid", "cosine"],
-    kernel_pca_n_components: int = 10,
-) -> pd.Series:
-    """Predict target variable for unseen data using canonical correlation analysis (CCA).
-
-    Parameters
-    ----------
-    embeddings_seen
-        Embeddings of the seen data. Index corresponding to condition names, values to embeddings.
-    target_variable
-        Target variable of the seen data. Index corresponding to condition names, values to target variable.
-    embeddings_unseen
-        Embeddings of the unseen data. Index corresponding to condition names, values to embeddings which to
-        predict the target variable.
-    kernel_pca_mode
-        Kernel for the KernelPCA.
-    kernel_pca_n_components
-        Number of components to keep in the KernelPCA.
-
-
-    Returns
-    -------
-    Predicted target variable for the unseen data.
-    """
-    kpca = KernelPCA(n_components=kernel_pca_n_components, kernel=kernel_pca_mode)
-    X = embeddings_seen.values
-    y = target_variable.loc[embeddings_seen.index].values
-
-    X_transformed = kpca.fit_transform(X)
-
-    cca = CCA(n_components=1)  # TODO: possibly extend to multiple variables
-    cca.fit(X_transformed, y)
-    _, y_c = cca.transform(X_transformed, y)
-    correct_orientation = np.corrcoef((y_c.squeeze()), y)[0, 1] > 0.0
-
-    X_new = embeddings_unseen.values
-    X_new_transformed = kpca.transform(X_new)
-    y_pred = cca.predict(X_new_transformed)
-
-    return pd.Series(
-        index=embeddings_unseen.index,
-        data=y_pred * (1.0 if correct_orientation else -1.0),
-    )
-
-
 def predict_with_kernel_cca(
     embeddings_seen: pd.DataFrame,
-    target_variable: pd.Series,
+    target_variables: pd.DataFrame,
     embeddings_unseen: pd.DataFrame,
     kernel: Literal["linear", "poly", "rbf", "sigmoid", "cosine"] = "poly",
     kernel_kwargs: Any = types.MappingProxyType({}),
@@ -133,8 +82,8 @@ def predict_with_kernel_cca(
     ----------
     embeddings_seen
         Embeddings of the seen data. Index corresponding to condition names, values to embeddings.
-    target_variable
-        Target variable of the seen data. Index corresponding to condition names, values to target variable.
+    target_variables
+        Target variable of the seen data. Index corresponding to condition names, values to target variables.
     embeddings_unseen
         Embeddings of the unseen data. Index corresponding to condition names, values to embeddings which to
         predict the target variable.
@@ -153,11 +102,10 @@ def predict_with_kernel_cca(
     X = embeddings_seen.values
     X_mean = X.mean(axis=0)
     X -= X_mean
-    y = (
-        target_variable.loc[embeddings_seen.index]
-        .values.reshape(-1, 1)
-        .astype("float64")
-    )
+    y = target_variables.loc[embeddings_seen.index].values.astype("float64")
+    if y.ndim == 1:
+        y = y.reshape(-1, 1)
+
     y_mean = y.mean(axis=0)
     y -= y_mean
 
@@ -188,7 +136,7 @@ def predict_with_kernel_cca(
     return pd.concat((projections_seen, projections_unseen))
 
 
-c_values = [0.9, 0.99]
+c_values = [0.5, 0.9, 0.99, 1.0]
 default_hyperparameters = {
     "linear": {"kernel": ["linear"], "c": [c_values, c_values]},
     "poly": {
@@ -208,22 +156,20 @@ default_hyperparameters = {
 
 def kernel_cca_hyper(
     embeddings_seen: pd.DataFrame,
-    target_variable: pd.Series,
+    target_variables: pd.DataFrame,
     kernel: Literal["linear", "poly", "rbf", "sigmoid", "cosine"],
     param_grid: dict[str, list[Any]] | None = None,
     k_folds_cv: int = 5,
-) -> tuple[Any, pd.Series]: #TODO: fix return type
+) -> tuple[Any, pd.Series]:  # TODO: fix return type
     """TODO"""
     if param_grid is None:
         param_grid = default_hyperparameters[kernel]
     X = embeddings_seen.values
     X_mean = X.mean(axis=0)
     X -= X_mean
-    y = (
-        target_variable.loc[embeddings_seen.index]
-        .values.reshape(-1, 1)
-        .astype("float64")
-    )
+    y = target_variables.loc[embeddings_seen.index].values.astype("float64")
+    if y.ndim == 1:
+        y = y.reshape(-1, 1)
     y_mean = y.mean(axis=0)
     y -= y_mean
 
