@@ -72,7 +72,7 @@ def predict_with_kernel_cca(
     embeddings_seen: pd.DataFrame,
     target_variables: pd.DataFrame,
     embeddings_unseen: pd.DataFrame,
-    kernel: Literal["linear", "poly", "rbf", "sigmoid", "cosine"] = "poly",
+    kernel: Literal["linear", "poly", "rbf", "sigmoid", "cosine"] | KCCA = "poly",
     kernel_kwargs: Any = types.MappingProxyType({}),
     return_all_data: bool = False,
 ) -> pd.Series | pd.DataFrame:
@@ -88,7 +88,7 @@ def predict_with_kernel_cca(
         Embeddings of the unseen data. Index corresponding to condition names, values to embeddings which to
         predict the target variable.
     kernel
-        Kernel for Kernel CCA.
+        Kernel for Kernel CCA, can be either a string accompanied by `kernel_kwargs` or a `KCCA` object.
     kernel_kwargs
         Keyword arguments for Kernel
     return_all_data
@@ -109,7 +109,11 @@ def predict_with_kernel_cca(
     y_mean = y.mean(axis=0)
     y -= y_mean
 
-    kcca = KCCA(latent_dimensions=1, kernel=kernel, **kernel_kwargs)
+    kcca = (
+        KCCA(latent_dimensions=1, kernel=kernel, **kernel_kwargs)
+        if isinstance(kernel, str)
+        else kernel
+    )
     kcca.fit((X, y))
     _, y_c = kcca.transform((X, y))
     correct_orientation = np.corrcoef((y_c.squeeze()), y.squeeze())[0, 1] > 0.0
