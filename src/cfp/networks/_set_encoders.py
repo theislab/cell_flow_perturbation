@@ -45,12 +45,15 @@ class MLPBlock(BaseModule):
         Whether to apply the activation function to the last layer.
     act_fn
         Activation function.
+    layer_norm
+        Whether to use layer normalization.
     """
 
     dims: Sequence[int] = (1024, 1024, 1024)
     dropout_rate: float = 0.0
     act_last_layer: bool = True
     act_fn: Callable[[jnp.ndarray], jnp.ndarray] = nn.silu
+    layer_norm: bool = False
 
     @nn.compact
     def __call__(self, x: jnp.ndarray, training: bool = True) -> jnp.ndarray:
@@ -72,7 +75,10 @@ class MLPBlock(BaseModule):
             return x
         z = x
         for i in range(len(self.dims) - 1):
-            z = self.act_fn(nn.Dense(self.dims[i])(z))
+            z = nn.Dense(self.dims[i])(z)
+            if self.layer_norm:
+                z = nn.LayerNorm()(z)
+            z = self.act_fn(z)
             z = nn.Dropout(self.dropout_rate)(z, deterministic=not training)
         z = nn.Dense(self.dims[-1])(z)
         z = self.act_fn(z) if self.act_last_layer else z
