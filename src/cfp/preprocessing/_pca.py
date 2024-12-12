@@ -12,7 +12,6 @@ def centered_pca(
     n_comps: int = 50,
     layer: str | None = None,
     method: str = "scanpy",
-    keep_centered_data: bool = True,
     copy: bool = False,
     **kwargs,
 ) -> ad.AnnData | None:
@@ -63,7 +62,8 @@ def centered_pca(
             rsc.pp.pca(
                 adata,
                 n_comps=n_comps,
-                layer=None if layer=="X" else layer,
+                layer=layer,
+                zero_center=True,
                 copy=False,
                 **kwargs,
             )
@@ -71,7 +71,8 @@ def centered_pca(
         sc.pp.pca(
             adata,
             n_comps=n_comps,
-            layer=None if layer=="X" else layer,
+            layer=layer,
+            zero_center=True,
             copy=False,
             **kwargs,
         )
