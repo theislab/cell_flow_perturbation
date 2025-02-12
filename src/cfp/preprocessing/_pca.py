@@ -25,7 +25,7 @@ def centered_pca(
     n_comps : int
         Number of principal components to compute.
     layer : str
-        Layer in `adata.layers` to use for PCA.
+        Layer in `adata.layers` to use for PCA. If `None`, uses `adata.X`.
     method : str
         Method to use for PCA. If `rapids`, uses `rapids_singlecell` with GPU acceleration. Otherwise, uses `scanpy`.
     keep_centered_data
@@ -52,7 +52,7 @@ def centered_pca(
 
     adata.varm["X_mean"] = np.array(X.mean(axis=0).T)
     adata.layers["X_centered"] = np.array(adata.X - adata.varm["X_mean"].T)
-    
+
     if method == "rapids":
         try:
             import rapids_singlecell as rsc
