@@ -618,7 +618,7 @@ class CellFlow:
     def get_condition_embedding(
         self,
         covariate_data: pd.DataFrame | ConditionData,
-        rep_dict: dict[str, str] | None = None,
+        rep_dict: dict[str, ArrayLike] | None = None,
         condition_id_key: str | None = None,
         key_added: str | None = _constants.CONDITION_EMBEDDING,
     ) -> pd.DataFrame:
@@ -636,7 +636,7 @@ class CellFlow:
             - an instance of :class:`cfp.data.ConditionData`.
 
         rep_dict
-            Dictionary containing the representations of the perturbation covaraiates.
+            Dictionary containing the representations of the perturbation covaraiates. Will be considered an empty dictionary if :obj:`None`.
         condition_id_key
             Key defining the name of the condition. Only available
             if ``'covariate_data'`` is a :class:`pandas.DataFrame`.
