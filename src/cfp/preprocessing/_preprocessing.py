@@ -213,7 +213,7 @@ def get_molecular_fingerprints(
 def encode_onehot(
     adata: ad.AnnData,
     covariate_keys: str | Sequence[str],
-    uns_key_added: Sequence[str],
+    uns_key_added: str,
     exclude_values: str | Sequence[Any] = None,
     copy: bool = False,
 ) -> None | ad.AnnData:
