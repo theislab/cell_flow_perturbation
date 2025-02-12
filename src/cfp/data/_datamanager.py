@@ -13,7 +13,13 @@ from tqdm import tqdm
 
 from cfp._logging import logger
 from cfp._types import ArrayLike
-from cfp.data._data import ConditionData, PredictionData, ReturnData, TrainingData, ValidationData
+from cfp.data._data import (
+    ConditionData,
+    PredictionData,
+    ReturnData,
+    TrainingData,
+    ValidationData,
+)
 
 from ._utils import _flatten_list, _to_list
 
@@ -901,11 +907,13 @@ class DataManager:
             cov_name = value if self.is_categorical else primary_cov
             if primary_group in self._covariate_reps:
                 rep_key = self._covariate_reps[primary_group]
-                if cov_name not in rep_dict[rep_key]:
+                try:
+                    prim_arr = rep_dict[rep_key][cov_name]
+                except KeyError:
                     raise ValueError(
-                        f"Representation for '{cov_name}' not found in `adata.uns['{rep_key}']`."
+                        f"Representation for '{cov_name}' not found in `adata.uns['{rep_key}']` or `rep_dict`."
                     )
-                prim_arr = jnp.asarray(rep_dict[rep_key][cov_name])
+                prim_arr = jnp.asarray(prim_arr)
             else:
                 prim_arr = jnp.asarray(
                     self.primary_one_hot_encoder.transform(  # type: ignore[union-attr]
