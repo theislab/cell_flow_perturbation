@@ -505,6 +505,7 @@ class DataManager:
         self,
         adata: anndata.AnnData,
         sample_rep: str | None = None,
+        device: str = "cpu",
     ) -> jax.Array:
         sample_rep = self._sample_rep if sample_rep is None else sample_rep
         if sample_rep == "X":
@@ -520,8 +521,8 @@ class DataManager:
                 )
             return jnp.asarray(adata.obsm[self._sample_rep])
         attr, key = next(iter(sample_rep.items()))  # type: ignore[union-attr]
-        return jnp.asarray(getattr(adata, attr)[key])
-
+        return jax.device_put(jnp.asarray(getattr(adata, attr)[key]), device=jax.devices("cpu")[0])
+    
     def _verify_control_data(self, adata: anndata.AnnData | None) -> None:
         if adata is None:
             return None
