@@ -16,11 +16,18 @@ perturbation_covariate_comb_args = [
 
 class TestCellFlow:
     @pytest.mark.parametrize("solver", ["otfm", "genot"])
+    @pytest.mark.parametrize("use_classifier_free_guidance", [False, True])
     def test_cellflow_solver(
-        self,
-        adata_perturbation,
-        solver,
+        self, adata_perturbation, solver, use_classifier_free_guidance
     ):
+        if solver == "genot" and use_classifier_free_guidance:
+            pytest.skip("Classifier free guidance is not implemented for GENOT")
+        if use_classifier_free_guidance:
+            cfg_p_resample = 0.3
+            cfg_ode_weight = 2.0
+        else:
+            cfg_p_resample = 0.0
+            cfg_ode_weight = 0.0
         sample_rep = "X"
         control_key = "control"
         perturbation_covariates = {"drug": ["drug1", "drug2"]}
@@ -47,6 +54,8 @@ class TestCellFlow:
             hidden_dims=(32, 32),
             decoder_dims=(32, 32),
             condition_encoder_kwargs=condition_encoder_kwargs,
+            cfg_p_resample=cfg_p_resample,
+            cfg_ode_weight=cfg_ode_weight,
         )
         assert cf._trainer is not None
 
