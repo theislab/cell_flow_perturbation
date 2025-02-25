@@ -15,6 +15,8 @@ from cfp._logging import logger
 from cfp._types import ArrayLike
 from cfp.data._data import ConditionData, PredictionData, ReturnData, TrainingData, ValidationData
 
+from ._parallel_utils import process_conditions
+
 from ._utils import _flatten_list, _to_list
 
 __all__ = ["DataManager"]
@@ -132,13 +134,22 @@ class DataManager:
         ]
         self._perturb_covar_keys = [k for k in perturb_covar_keys if k is not None]
 
-    def get_train_data(self, adata: anndata.AnnData) -> Any:
+    def get_train_data(
+        self,
+        adata: anndata.AnnData,
+        parallelize: bool = False,
+        n_workers: int = 4,
+    ) -> Any:
         """Get training data for the model.
 
         Parameters
         ----------
         adata
             An :class:`~anndata.AnnData` object.
+        parallelize
+            Whether to use parallel processing.
+        n_workers
+            Number of workers for parallel processing.
 
         Returns
         -------
@@ -146,7 +157,10 @@ class DataManager:
         """
         split_cov_combs = self._get_split_cov_combs(adata.obs)
         cond_data = self._get_condition_data(
-            split_cov_combs=split_cov_combs, adata=adata
+            split_cov_combs=split_cov_combs,
+            adata=adata,
+            parallelize=parallelize,
+            n_workers=n_workers
         )
         cell_data = self._get_cell_data(adata)
         return TrainingData(
@@ -212,6 +226,8 @@ class DataManager:
         covariate_data: pd.DataFrame,
         rep_dict: dict[str, Any] | None = None,
         condition_id_key: str | None = None,
+        parallelize: bool = False,
+        n_workers: int = 4,
     ) -> Any:
         """Get predictions for control cells.
 
@@ -234,6 +250,10 @@ class DataManager:
             If not provided, :attr:`~anndata.AnnData.uns` is used.
         condition_id_key
             Key in :class:`~pandas.DataFrame` that defines the condition names.
+        parallelize
+            Whether to use parallel processing.
+        n_workers
+            Number of workers for parallel processing.
 
         Returns
         -------
@@ -249,6 +269,8 @@ class DataManager:
             covariate_data=covariate_data,
             rep_dict=adata.uns if rep_dict is None else rep_dict,
             condition_id_key=condition_id_key,
+            parallelize=parallelize,
+            n_workers=n_workers,
         )
 
         cell_data = self._get_cell_data(adata, sample_rep)
@@ -276,6 +298,8 @@ class DataManager:
         covariate_data: pd.DataFrame,
         rep_dict: dict[str, Any] | None = None,
         condition_id_key: str | None = None,
+        parallelize: bool = False,
+        n_workers: int = 4,
     ) -> ConditionData:
         """Get condition data for the model.
 
@@ -286,6 +310,11 @@ class DataManager:
         condition_id_key
             Key in ``covariate_data`` that defines the condition id.
         rep_dict
+            Dictionary with representations of the covariates.
+        parallelize
+            Whether to use parallel processing.
+        n_workers
+            Number of workers for parallel processing.
 
         Returns
         -------
@@ -299,6 +328,8 @@ class DataManager:
             covariate_data=covariate_data,
             rep_dict=rep_dict,
             condition_id_key=condition_id_key,
+            parallelize=parallelize,
+            n_workers=n_workers,
         )
         return ConditionData(
             condition_data=cond_data.condition_data,
@@ -324,6 +355,8 @@ class DataManager:
         covariate_data: pd.DataFrame | None = None,
         rep_dict: dict[str, Any] | None = None,
         condition_id_key: str | None = None,
+        parallelize: bool = False,
+        n_workers: int = 4,
     ) -> ReturnData:
         # for prediction: adata is None, covariate_data is provided
         # for training/validation: adata is provided and used to get cell masks, covariate_data is None
@@ -390,7 +423,6 @@ class DataManager:
 
         # iterate over unique split covariate combinations
         for split_combination in split_cov_combs:
-
             # get masks for split covariates; for prediction, it's done outside this method
             if adata is not None:
                 split_covariates_mask, split_idx_to_covariates, split_cov_mask = (
@@ -403,9 +435,8 @@ class DataManager:
                         src_counter=src_counter,
                     )
                 )
-            conditional_distributions = []
 
-            # iterate over target conditions
+            # Filter perturbation covariates for current split combination
             filter_dict = dict(
                 zip(self.split_covariates, split_combination, strict=False)
             )
@@ -415,41 +446,70 @@ class DataManager:
                     == list(filter_dict.values())
                 ).all(axis=1)
             ]
-            pbar = tqdm(pc_df.iterrows(), total=pc_df.shape[0])
 
-            for i, tgt_cond in pbar:
-                tgt_cond = tgt_cond[self._perturb_covar_keys]
+            if parallelize:
+                # Use parallel processing
+                (
+                    conditional_distributions,
+                    perturbation_idx_to_covariates_new,
+                    perturbation_idx_to_id_new,
+                    perturbation_covariates_mask,
+                    condition_data,
+                    tgt_counter,
+                ) = process_conditions(
+                    pc_df=pc_df,
+                    dm=self,
+                    adata=adata,
+                    covariate_data=covariate_data,
+                    perturb_covar_to_cells=perturb_covar_to_cells,
+                    control_mask=control_mask,
+                    split_cov_mask=split_cov_mask if adata is not None else None,
+                    rep_dict=rep_dict,
+                    perturbation_covariates_mask=perturbation_covariates_mask,
+                    condition_data=condition_data,
+                    tgt_counter=tgt_counter,
+                    n_workers=n_workers,
+                )
+                # Update dictionaries
+                perturbation_idx_to_covariates.update(perturbation_idx_to_covariates_new)
+                perturbation_idx_to_id.update(perturbation_idx_to_id_new)
+            else:
+                conditional_distributions = []
+                pbar = tqdm(pc_df.iterrows(), total=pc_df.shape[0])
 
-                # for train/validation, only extract covariate combinations that are present in adata
-                if adata is not None:
-                    mask = covariate_data.index.isin(perturb_covar_to_cells[i])
-                    mask *= (1 - control_mask) * split_cov_mask
-                    mask = np.array(mask == 1)
-                    if mask.sum() == 0:
-                        continue
-                    # map unique condition id to target id
-                    perturbation_covariates_mask[mask] = tgt_counter  # type: ignore[index]
+                for i, tgt_cond in pbar:
+                    tgt_cond = tgt_cond[self._perturb_covar_keys]
 
-                # map target id to unique conditions and their ids
-                conditional_distributions.append(tgt_counter)
-                perturbation_idx_to_covariates[tgt_counter] = tgt_cond.values
-                if condition_id_key is not None:
-                    perturbation_idx_to_id[tgt_counter] = i
+                    # for train/validation, only extract covariate combinations that are present in adata
+                    if adata is not None:
+                        mask = covariate_data.index.isin(perturb_covar_to_cells[i])
+                        mask *= (1 - control_mask) * split_cov_mask
+                        mask = np.array(mask == 1)
+                        if mask.sum() == 0:
+                            continue
+                        # map unique condition id to target id
+                        perturbation_covariates_mask[mask] = tgt_counter  # type: ignore[index]
 
-                # get embeddings for conditions
-                if self.is_conditional:
-                    embedding = self._get_perturbation_covariates(
-                        condition_data=tgt_cond,
-                        rep_dict=rep_dict,
-                        perturb_covariates={
-                            k: _to_list(v)
-                            for k, v in self._perturbation_covariates.items()
-                        },
-                    )
-                    for pert_cov, emb in embedding.items():
-                        condition_data[pert_cov].append(emb)
+                    # map target id to unique conditions and their ids
+                    conditional_distributions.append(tgt_counter)
+                    perturbation_idx_to_covariates[tgt_counter] = tgt_cond.values
+                    if condition_id_key is not None:
+                        perturbation_idx_to_id[tgt_counter] = i
 
-                tgt_counter += 1
+                    # get embeddings for conditions
+                    if self.is_conditional:
+                        embedding = self._get_perturbation_covariates(
+                            condition_data=tgt_cond,
+                            rep_dict=rep_dict,
+                            perturb_covariates={
+                                k: _to_list(v)
+                                for k, v in self._perturbation_covariates.items()
+                            },
+                        )
+                        for pert_cov, emb in embedding.items():
+                            condition_data[pert_cov].append(emb)
+
+                    tgt_counter += 1
 
             # map source (control) to target condition ids
             control_to_perturbation[src_counter] = np.array(conditional_distributions)
