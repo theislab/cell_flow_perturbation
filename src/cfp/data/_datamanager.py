@@ -1,5 +1,6 @@
 from collections.abc import Sequence
-from typing import Any
+from typing import Any, Dict, List, Tuple
+from multiprocessing import Pool
 
 import anndata
 import jax
@@ -15,11 +16,42 @@ from cfp._logging import logger
 from cfp._types import ArrayLike
 from cfp.data._data import ConditionData, PredictionData, ReturnData, TrainingData, ValidationData
 
-from ._parallel_utils import process_conditions
 
 from ._utils import _flatten_list, _to_list
 
 __all__ = ["DataManager"]
+
+def process_single_condition(args):
+    i, tgt_cond, dm_attrs, is_training, covariate_data_index, perturb_covar_to_cells_i, control_mask, split_cov_mask, rep_dict = args
+    result = {
+        "tgt_cond": tgt_cond[dm_attrs["perturb_covar_keys"]], 
+        "mask": None, 
+        "skip": False, 
+        "embedding": None
+    }
+
+    # Process masks for train/validation
+    if is_training:
+        # Only pass necessary data to avoid copying full dataframe
+        mask = covariate_data_index.isin(perturb_covar_to_cells_i)
+        mask *= (1 - control_mask) * split_cov_mask
+        mask = np.array(mask == 1)
+        if mask.sum() == 0:
+            result["skip"] = True
+            return result
+        result["mask"] = mask
+
+    # Get embeddings if conditional
+    if dm_attrs["is_conditional"]:
+        embedding = dm_attrs["get_perturbation_covariates"](
+            condition_data=result["tgt_cond"],
+            rep_dict=rep_dict,
+            perturb_covariates={k: _to_list(v) for k, v in dm_attrs["perturbation_covariates"].items()},
+        )
+        result["embedding"] = embedding
+
+    return result
+
 
 
 class DataManager:
@@ -449,21 +481,20 @@ class DataManager:
 
             if parallelize:
                 # Use parallel processing
-                (
-                    conditional_distributions,
-                    perturbation_idx_to_covariates_new,
-                    perturbation_idx_to_id_new,
-                    perturbation_covariates_mask,
-                    condition_data,
-                    tgt_counter,
-                ) = process_conditions(
+                is_training = adata is not None
+                (conditional_distributions,
+                 perturbation_idx_to_covariates_new,
+                 perturbation_idx_to_id_new,
+                 perturbation_covariates_mask,
+                 condition_data,
+                 tgt_counter,
+                ) = self.process_conditions(
                     pc_df=pc_df,
-                    dm=self,
-                    adata=adata,
+                    is_training=is_training,
                     covariate_data=covariate_data,
                     perturb_covar_to_cells=perturb_covar_to_cells,
                     control_mask=control_mask,
-                    split_cov_mask=split_cov_mask if adata is not None else None,
+                    split_cov_mask=split_cov_mask if is_training else None,
                     rep_dict=rep_dict,
                     perturbation_covariates_mask=perturbation_covariates_mask,
                     condition_data=condition_data,
@@ -1121,3 +1152,135 @@ class DataManager:
     def sample_rep(self) -> str | dict[str, str]:
         """Key of the sample representation."""
         return self._sample_rep
+
+
+
+
+
+    def parallel_process_conditions(
+        self,
+        pc_df: pd.DataFrame,
+        is_training: bool,
+        covariate_data: pd.DataFrame,
+        perturb_covar_to_cells: List,
+        control_mask: np.ndarray,
+        split_cov_mask: np.ndarray,
+        rep_dict: Dict[str, Any],
+        n_workers: int = 4
+    ) -> List:
+        from joblib import Parallel, delayed
+        
+        # Extract only necessary attributes from DataManager
+        dm_attrs = {
+            "is_conditional": self.is_conditional,
+            "perturb_covar_keys": self._perturb_covar_keys,
+            "perturbation_covariates": self._perturbation_covariates,
+            "get_perturbation_covariates": self._get_perturbation_covariates
+        }
+
+        # Only pass the index instead of full dataframe
+        covariate_data_index = covariate_data.index
+
+        # Process conditions in parallel using joblib with context manager
+        with Parallel(n_jobs=n_workers, backend='threading') as parallel:
+            results = parallel(
+                delayed(process_single_condition)(
+                    (i, tgt_cond, dm_attrs, is_training, covariate_data_index, 
+                     perturb_covar_to_cells[i], control_mask, split_cov_mask, rep_dict)
+                )
+                for i, tgt_cond in pc_df.iterrows()
+            )
+
+        return results
+
+
+
+    def process_conditions(
+        self,
+        pc_df: pd.DataFrame,
+        is_training: bool,
+        covariate_data: pd.DataFrame,
+        perturb_covar_to_cells: List,
+        control_mask: np.ndarray,
+        split_cov_mask: np.ndarray,
+        rep_dict: Dict[str, Any],
+        perturbation_covariates_mask: np.ndarray,
+        condition_data: Dict[str, List[np.ndarray]],
+        tgt_counter: int = 0,
+        n_workers: int = 4,
+    ) -> Tuple[List, Dict, Dict, np.ndarray, Dict, int]:
+        """
+        Process conditions and aggregate results.
+
+        Parameters
+        ----------
+        pc_df : pd.DataFrame
+            DataFrame containing perturbation conditions
+        dm : DataManager
+            DataManager instance
+        is_training : bool
+            Whether the data is for training or prediction
+        covariate_data : pd.DataFrame
+            DataFrame containing covariate data
+        perturb_covar_to_cells : List
+            List mapping perturbation conditions to cells
+        control_mask : np.ndarray
+            Mask for control cells
+        split_cov_mask : np.ndarray
+            Mask for split covariates
+        rep_dict : Dict[str, Any]
+            Dictionary containing representations
+        perturbation_covariates_mask : np.ndarray
+            Mask for perturbation covariates
+        condition_data : Dict[str, List[np.ndarray]]
+            Dictionary to store condition data
+        tgt_counter : int, optional
+            Starting value for target counter, by default 0
+        n_workers : int, optional
+            Number of workers for parallel processing, by default 4
+
+        Returns
+        -------
+        Tuple containing:
+            - conditional_distributions
+            - perturbation_idx_to_covariates
+            - perturbation_idx_to_id
+            - perturbation_covariates_mask
+            - condition_data
+            - tgt_counter
+        """
+        conditional_distributions = []
+        perturbation_idx_to_covariates = {}
+        perturbation_idx_to_id = {}
+
+        # Process all conditions in parallel
+        results = self.parallel_process_conditions(
+            pc_df, is_training, covariate_data, perturb_covar_to_cells,
+            control_mask, split_cov_mask, rep_dict, n_workers=n_workers
+        )
+
+        # Process results sequentially (this part needs to be sequential due to tgt_counter)
+        for idx, result in enumerate(results):
+            if result["skip"]:
+                continue
+
+            if result["mask"] is not None:
+                perturbation_covariates_mask[result["mask"]] = tgt_counter
+
+            conditional_distributions.append(tgt_counter)
+            perturbation_idx_to_covariates[tgt_counter] = result["tgt_cond"].values
+
+            if result["embedding"] is not None:
+                for pert_cov, emb in result["embedding"].items():
+                    condition_data[pert_cov].append(emb)
+
+            tgt_counter += 1
+
+        return (
+            conditional_distributions,
+            perturbation_idx_to_covariates,
+            perturbation_idx_to_id,
+            perturbation_covariates_mask,
+            condition_data,
+            tgt_counter,
+        )
