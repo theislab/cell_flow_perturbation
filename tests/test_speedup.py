@@ -31,7 +31,7 @@ def create_large_dataset(base_adata, scale_factor=10):
     return new_adata
 
 
-def test_scaling(adata_perturbation, sizes=[10,], n_workers_list=[ 8,]):
+def test_scaling(adata_perturbation, sizes=[1000,], n_workers_list=[ 30,]):
     """Test how performance scales with data size and number of workers."""
     from cfp.data._datamanager import DataManager
 
