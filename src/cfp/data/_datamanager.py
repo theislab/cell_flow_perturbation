@@ -1,3 +1,4 @@
+from collections import defaultdict
 from collections.abc import Sequence
 from typing import Any
 
@@ -8,13 +9,12 @@ import scipy.sparse as sp
 import sklearn.preprocessing as preprocessing
 from pandas.api.types import is_numeric_dtype
 from tqdm import tqdm
-from collections import defaultdict
 
 from cfp._logging import logger
 from cfp._types import ArrayLike
 from cfp.data._data import ConditionData, PredictionData, ReturnData, TrainingData, ValidationData
 
-from ._utils import _flatten_list, _to_list, _check_shape, _pad_to_max_length
+from ._utils import _check_shape, _flatten_list, _pad_to_max_length, _to_list
 from ._worker import _process_split_combination_worker
 
 __all__ = ["DataManager"]

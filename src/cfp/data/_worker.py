@@ -1,7 +1,9 @@
-import numpy as np
-from typing import Any, Dict
-import pandas as pd
 from collections import defaultdict
+from typing import Any, Dict
+
+import numpy as np
+import pandas as pd
+
 from ._utils import _check_shape, _pad_to_max_length
 
 
