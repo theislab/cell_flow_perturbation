@@ -64,11 +64,23 @@ def _get_condition_embeddings(condition_data: pd.Series, worker_data: dict[str, 
             # Get representation
             if primary_group in worker_data["covariate_reps"]:
                 rep_key = worker_data["covariate_reps"][primary_group]
-                arr = np.asarray(worker_data["rep_dict"][rep_key].get(str(cov_name), worker_data["null_value"]))
+                # Convert cov_name to string for dictionary lookup
+                cov_name_str = str(cov_name)
+                if cov_name_str not in worker_data["rep_dict"][rep_key]:
+                    # Handle missing representation
+                    arr = np.full((1, 1), worker_data["null_value"])
+                else:
+                    arr = np.asarray(worker_data["rep_dict"][rep_key][cov_name_str])
             else:
-                arr = np.asarray(value)
+                # If no representation is provided, use the value directly
+                # But make sure it's a numeric value first
+                arr = np.asarray(float(value) if not worker_data["is_categorical"] else worker_data["null_value"])
 
-            arr = _check_shape(arr)
+            # Only call _check_shape if arr is already a numeric array
+            if not np.issubdtype(arr.dtype, np.number):
+                arr = np.full((1, 1), worker_data["null_value"])
+            else:
+                arr = _check_shape(arr)
             perturb_covar_emb[primary_group].append(arr)
 
     # Process linked covariates
@@ -80,11 +92,22 @@ def _get_condition_embeddings(condition_data: pd.Series, worker_data: dict[str, 
                 value = condition_data[linked_cov]
                 if linked_group in worker_data["covariate_reps"]:
                     rep_key = worker_data["covariate_reps"][linked_group]
-                    arr = np.asarray(worker_data["rep_dict"][rep_key][str(value)])
+                    # Convert value to string for dictionary lookup
+                    value_str = str(value)
+                    if value_str not in worker_data["rep_dict"][rep_key]:
+                        arr = np.full((1, 1), worker_data["null_value"])
+                    else:
+                        arr = np.asarray(worker_data["rep_dict"][rep_key][value_str])
                 else:
-                    arr = np.asarray(value)
+                    # If no representation is provided, use the value directly
+                    # But make sure it's a numeric value first
+                    arr = np.asarray(float(value) if np.issubdtype(type(value), np.number) else worker_data["null_value"])
 
-            arr = _check_shape(arr)
+            # Only call _check_shape if arr is already a numeric array
+            if not np.issubdtype(arr.dtype, np.number):
+                arr = np.full((1, 1), worker_data["null_value"])
+            else:
+                arr = _check_shape(arr)
             perturb_covar_emb[linked_group].append(arr)
 
     # Process sample covariates
@@ -92,11 +115,23 @@ def _get_condition_embeddings(condition_data: pd.Series, worker_data: dict[str, 
         value = condition_data[sample_cov]
         if sample_cov in worker_data["covariate_reps"]:
             rep_key = worker_data["covariate_reps"][sample_cov]
-            arr = np.asarray(worker_data["rep_dict"][rep_key][str(value)])
+            # Convert value to string for dictionary lookup
+            value_str = str(value)
+            if value_str not in worker_data["rep_dict"][rep_key]:
+                arr = np.full((1, 1), worker_data["null_value"])
+            else:
+                arr = np.asarray(worker_data["rep_dict"][rep_key][value_str])
         else:
-            arr = np.asarray(value)
+            # If no representation is provided, use the value directly
+            # But make sure it's a numeric value first
+            arr = np.asarray(float(value) if np.issubdtype(type(value), np.number) else worker_data["null_value"])
 
-        arr = _check_shape(arr)
+        # Only call _check_shape if arr is already a numeric array
+        if not np.issubdtype(arr.dtype, np.number):
+            arr = np.full((1, 1), worker_data["null_value"])
+        else:
+            arr = _check_shape(arr)
+            
         perturb_covar_emb[sample_cov].append(arr)
 
     # Pad and combine
