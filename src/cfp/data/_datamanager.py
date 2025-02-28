@@ -526,7 +526,7 @@ class DataManager:
         covariate_data = covariate_data if covariate_data is not None else adata.obs  # type: ignore[union-attr]
         if rep_dict is None:
             rep_dict = adata.uns if adata is not None else {}
-        # check if all perturbation/split covariates and control cells are present in the input
+        # Check if all perturbation/split covariates and control cells are present in the input
         self._verify_covariate_data(
             covariate_data,
             {covar: _to_list(covar) for covar in self._sample_covariates},
@@ -551,6 +551,7 @@ class DataManager:
         worker_data = {
             "perturb_covar_df": perturb_covar_df,
             "covariate_data": covariate_data,
+            "adata": adata,  # Pass adata to the worker
             "rep_dict": rep_dict,
             "control_key": self._control_key,
             "perturb_covar_keys": self._perturb_covar_keys,
@@ -603,60 +604,70 @@ class DataManager:
 
         # Initialize masks if adata is provided
         if adata is not None:
-            split_covariates_mask = np.full((len(adata),), -1)
-            perturbation_covariates_mask = np.full((len(adata),), -1)
+            split_covariates_mask = np.full((len(adata),), -1, dtype=np.int32)
+            perturbation_covariates_mask = np.full((len(adata),), -1, dtype=np.int32)
+            # For each split combination, we need to identify control cells
+            control_mask = adata.obs[self._control_key].values
         else:
             split_covariates_mask = None
             perturbation_covariates_mask = None
+            control_mask = None
 
         current_tgt_counter = 0
         for src_counter, result in enumerate(results):
             # Skip empty results (split combinations with no targets)
-            if not result["perturbation_idx_to_covariates"]:
+            if not result.get("perturbation_idx_to_covariates", {}):
                 continue
+            # Get split combination information if available
+            if "split_idx_to_covariates" in result:
+                for split_idx, split_covars in result["split_idx_to_covariates"].items():
+                    combined_split_idx_to_covariates[src_counter] = split_covars
+            # If we have adata, update the split_covariates_mask for this combination
+            if adata is not None and "split_combination" in result:
+                # Create mask for this split combination
+                split_combination = result["split_combination"]
+                filter_dict = dict(zip(self._split_covariates, split_combination, strict=False))
+                split_cov_mask = (
+                    adata.obs[list(filter_dict.keys())] == list(filter_dict.values())
+                ).all(axis=1).values
+                # Mark control cells for this split as src_counter
+                control_split_mask = control_mask & split_cov_mask
+                split_covariates_mask[control_split_mask] = src_counter
 
             n_targets = len(result["perturbation_idx_to_covariates"])
-
-            # Update indices
+            # Update control_to_perturbation mapping
             control_to_perturbation_indices = np.arange(current_tgt_counter, current_tgt_counter + n_targets)
             combined_control_to_perturbation[src_counter] = control_to_perturbation_indices
 
-            # Update mappings
-            for i, (covs, cond_id) in enumerate(
-                zip(result["perturbation_idx_to_covariates"].values(), result["perturbation_idx_to_id"].values())
-            ):
-                combined_perturbation_idx_to_covariates[current_tgt_counter + i] = covs
-                if cond_id is not None:
-                    combined_perturbation_idx_to_id[current_tgt_counter + i] = cond_id
+            # Update perturbation mappings
+            for i, (covs, cond_id) in enumerate(zip(
+                result["perturbation_idx_to_covariates"].values(), 
+                result["perturbation_idx_to_id"].values()
+            )):
+                target_idx = current_tgt_counter + i
+                combined_perturbation_idx_to_covariates[target_idx] = covs
+                combined_perturbation_idx_to_id[target_idx] = cond_id
+                # If we have adata, update perturbation masks
+                if adata is not None and "cell_masks" in result:
+                    if i < len(result["cell_masks"]):
+                        cell_mask = result["cell_masks"][i]
+                        if cell_mask.sum() > 0:
+                            perturbation_covariates_mask[cell_mask] = target_idx
 
             # Update condition data
-            for key, data in result["condition_data"].items():
-                combined_condition_data[key].extend(data)
-
-            # Update split covariates mapping
-            if "split_idx_to_covariates" in result:
-                for split_idx, split_covs in result["split_idx_to_covariates"].items():
-                    combined_split_idx_to_covariates[src_counter] = split_covs
-
-            # Update masks if adata is provided
-            if adata is not None:
-                if "split_covariates_mask" in result:
-                    # Map -1 to stay -1, and valid indices to src_counter
-                    mask = result["split_covariates_mask"] >= 0
-                    split_covariates_mask[mask] = src_counter
-
-                if "perturbation_covariates_mask" in result:
-                    # Map valid indices to current target counter range
-                    mask = result["perturbation_covariates_mask"] >= 0
-                    perturbation_covariates_mask[mask] = (
-                        result["perturbation_covariates_mask"][mask] + current_tgt_counter
-                    )
+            for key, data in result.get("condition_data", {}).items():
+                if isinstance(data, list):
+                    combined_condition_data[key].extend(data)
+                else:
+                    combined_condition_data[key].append(data)
 
             current_tgt_counter += n_targets
 
         # Convert lists to arrays in condition data
         if combined_condition_data:
-            combined_condition_data = {k: np.array(v) for k, v in combined_condition_data.items()}
+            for k, v in combined_condition_data.items():
+                if isinstance(v[0], np.ndarray):
+                    combined_condition_data[k] = np.array(v)
 
         return ReturnData(
             split_covariates_mask=split_covariates_mask,

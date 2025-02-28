@@ -1,0 +1,47 @@
+============================= test session starts ==============================
+platform darwin -- Python 3.11.9, pytest-8.2.2, pluggy-1.5.0
+rootdir: /Users/selman.ozleyen/Documents/projects/cell_flow_perturbation
+configfile: pyproject.toml
+plugins: cov-5.0.0, memray-1.7.0, typeguard-2.13.3, jaxtyping-0.2.34, mock-3.14.0, xdist-3.6.1
+collected 188 items
+
+tests/data/test_datamanager.py ......................................... [ 21%]
+........................................................................ [ 60%]
+..........................s............................................. [ 98%]
+...                                                                      [100%]
+
+=============================== warnings summary ===============================
+../../../mambaforge/envs/moscot/lib/python3.11/site-packages/anndata/utils.py:429
+  /Users/selman.ozleyen/mambaforge/envs/moscot/lib/python3.11/site-packages/anndata/utils.py:429: FutureWarning: Importing read_csv from `anndata` is deprecated. Import anndata.io.read_csv instead.
+    warnings.warn(msg, FutureWarning)
+
+../../../mambaforge/envs/moscot/lib/python3.11/site-packages/anndata/utils.py:429
+  /Users/selman.ozleyen/mambaforge/envs/moscot/lib/python3.11/site-packages/anndata/utils.py:429: FutureWarning: Importing read_excel from `anndata` is deprecated. Import anndata.io.read_excel instead.
+    warnings.warn(msg, FutureWarning)
+
+../../../mambaforge/envs/moscot/lib/python3.11/site-packages/anndata/utils.py:429
+  /Users/selman.ozleyen/mambaforge/envs/moscot/lib/python3.11/site-packages/anndata/utils.py:429: FutureWarning: Importing read_hdf from `anndata` is deprecated. Import anndata.io.read_hdf instead.
+    warnings.warn(msg, FutureWarning)
+
+../../../mambaforge/envs/moscot/lib/python3.11/site-packages/anndata/utils.py:429
+  /Users/selman.ozleyen/mambaforge/envs/moscot/lib/python3.11/site-packages/anndata/utils.py:429: FutureWarning: Importing read_loom from `anndata` is deprecated. Import anndata.io.read_loom instead.
+    warnings.warn(msg, FutureWarning)
+
+../../../mambaforge/envs/moscot/lib/python3.11/site-packages/anndata/utils.py:429
+  /Users/selman.ozleyen/mambaforge/envs/moscot/lib/python3.11/site-packages/anndata/utils.py:429: FutureWarning: Importing read_mtx from `anndata` is deprecated. Import anndata.io.read_mtx instead.
+    warnings.warn(msg, FutureWarning)
+
+../../../mambaforge/envs/moscot/lib/python3.11/site-packages/anndata/utils.py:429
+  /Users/selman.ozleyen/mambaforge/envs/moscot/lib/python3.11/site-packages/anndata/utils.py:429: FutureWarning: Importing read_text from `anndata` is deprecated. Import anndata.io.read_text instead.
+    warnings.warn(msg, FutureWarning)
+
+../../../mambaforge/envs/moscot/lib/python3.11/site-packages/anndata/utils.py:429
+  /Users/selman.ozleyen/mambaforge/envs/moscot/lib/python3.11/site-packages/anndata/utils.py:429: FutureWarning: Importing read_umi_tools from `anndata` is deprecated. Import anndata.io.read_umi_tools instead.
+    warnings.warn(msg, FutureWarning)
+
+tests/data/test_datamanager.py: 187 warnings
+  /Users/selman.ozleyen/mambaforge/envs/moscot/lib/python3.11/site-packages/anndata/_core/aligned_df.py:68: ImplicitModificationWarning: Transforming to str index.
+    warnings.warn("Transforming to str index.", ImplicitModificationWarning)
+
+-- Docs: https://docs.pytest.org/en/stable/how-to/capture-warnings.html
+=========== 187 passed, 1 skipped, 194 warnings in 139.07s (0:02:19) ===========
