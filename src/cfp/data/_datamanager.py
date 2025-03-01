@@ -552,7 +552,8 @@ class DataManager:
         worker_data = {
             "perturb_covar_df": perturb_covar_df,
             "covariate_data": covariate_data,
-            "adata": adata,  # Pass adata to the worker
+            # "adata": adata,  # Pass adata to the worker
+            "has_adata": adata is not None,
             "rep_dict": rep_dict,
             "control_key": self._control_key,
             "perturb_covar_keys": self._perturb_covar_keys,

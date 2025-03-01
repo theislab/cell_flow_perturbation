@@ -32,9 +32,8 @@ def _process_split_combination_worker(split_combination: list[Any], worker_data:
     if filter_dict:
         pc_df = pc_df[(pc_df[list(filter_dict.keys())] == list(filter_dict.values())).all(axis=1)]
 
-    # Process cell masks if adata is provided in worker_data
-    adata = worker_data.get("adata")
-    if adata is not None:
+    has_adata = worker_data.get("has_adata", False)
+    if has_adata:
         control_mask = covariate_data[control_key].values
 
         # Create mask for current split combination
@@ -64,7 +63,7 @@ def _process_split_combination_worker(split_combination: list[Any], worker_data:
         perturbation_idx_to_id[i] = idx
 
         # Calculate cell mask for this condition if adata is provided
-        if adata is not None:
+        if has_adata:
             cell_indices = perturb_covar_to_cells.get(idx, [])
             cell_mask = np.zeros(len(covariate_data), dtype=bool)
 
@@ -92,7 +91,7 @@ def _process_split_combination_worker(split_combination: list[Any], worker_data:
         "split_combination": split_combination,
     }
 
-    if adata is not None:
+    if has_adata:
         result["cell_masks"] = cell_masks
 
     return result
