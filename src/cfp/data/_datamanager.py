@@ -1,9 +1,9 @@
+import os
+from collections import defaultdict
 from collections.abc import Sequence
 from typing import Any
 
 import anndata
-import jax
-import jax.numpy as jnp
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
@@ -15,7 +15,8 @@ from cfp._logging import logger
 from cfp._types import ArrayLike
 from cfp.data._data import ConditionData, PredictionData, ReturnData, TrainingData, ValidationData
 
-from ._utils import _flatten_list, _to_list
+from ._utils import _check_shape, _flatten_list, _pad_to_max_length, _to_list
+from ._worker import _process_split_combination_worker
 
 __all__ = ["DataManager"]
 
@@ -132,13 +133,22 @@ class DataManager:
         ]
         self._perturb_covar_keys = [k for k in perturb_covar_keys if k is not None]
 
-    def get_train_data(self, adata: anndata.AnnData) -> Any:
+    def get_train_data(
+        self, 
+        adata: anndata.AnnData,
+        parallelize: bool = False,
+        n_workers: int | None = None,
+    ) -> Any:
         """Get training data for the model.
 
         Parameters
         ----------
         adata
             An :class:`~anndata.AnnData` object.
+        parallelize
+            Whether to use parallel processing.
+        n_workers
+            Number of workers to use if parallelize is True.
 
         Returns
         -------
@@ -146,7 +156,10 @@ class DataManager:
         """
         split_cov_combs = self._get_split_cov_combs(adata.obs)
         cond_data = self._get_condition_data(
-            split_cov_combs=split_cov_combs, adata=adata
+            split_cov_combs=split_cov_combs, 
+            adata=adata,
+            parallelize=parallelize,
+            n_workers=n_workers
         )
         cell_data = self._get_cell_data(adata)
         return TrainingData(
@@ -168,6 +181,8 @@ class DataManager:
         adata: anndata.AnnData,
         n_conditions_on_log_iteration: int | None = None,
         n_conditions_on_train_end: int | None = None,
+        parallelize: bool = False,
+        n_workers: int | None = None,
     ) -> ValidationData:
         """Get validation data for the model.
 
@@ -179,6 +194,10 @@ class DataManager:
             Number of conditions to validate on during logging.
         n_conditions_on_train_end
             Number of conditions to validate on at the end of training.
+        parallelize
+            Whether to use parallel processing.
+        n_workers
+            Number of workers to use if parallelize is True.
 
         Returns
         -------
@@ -186,7 +205,10 @@ class DataManager:
         """
         split_cov_combs = self._get_split_cov_combs(adata.obs)
         cond_data = self._get_condition_data(
-            split_cov_combs=split_cov_combs, adata=adata
+            split_cov_combs=split_cov_combs, 
+            adata=adata,
+            parallelize=parallelize,
+            n_workers=n_workers
         )
         cell_data = self._get_cell_data(adata)
         return ValidationData(
@@ -212,6 +234,8 @@ class DataManager:
         covariate_data: pd.DataFrame,
         rep_dict: dict[str, Any] | None = None,
         condition_id_key: str | None = None,
+        parallelize: bool = False,
+        n_workers: int | None = None,
     ) -> Any:
         """Get predictions for control cells.
 
@@ -234,6 +258,10 @@ class DataManager:
             If not provided, :attr:`~anndata.AnnData.uns` is used.
         condition_id_key
             Key in :class:`~pandas.DataFrame` that defines the condition names.
+        parallelize
+            Whether to use parallel processing.
+        n_workers
+            Number of workers to use if parallelize is True.
 
         Returns
         -------
@@ -249,6 +277,8 @@ class DataManager:
             covariate_data=covariate_data,
             rep_dict=adata.uns if rep_dict is None else rep_dict,
             condition_id_key=condition_id_key,
+            parallelize=parallelize,
+            n_workers=n_workers,
         )
 
         cell_data = self._get_cell_data(adata, sample_rep)
@@ -317,7 +347,8 @@ class DataManager:
         else:
             return [[]]
 
-    def _get_condition_data(
+
+    def _get_condition_data_old(
         self,
         split_cov_combs: np.ndarray | list[list[Any]],
         adata: anndata.AnnData | None,
@@ -368,15 +399,15 @@ class DataManager:
 
         # intialize data containers
         if adata is not None:
-            split_covariates_mask = np.full((len(adata),), -1, dtype=jnp.int32)
-            perturbation_covariates_mask = np.full((len(adata),), -1, dtype=jnp.int32)
+            split_covariates_mask = np.full((len(adata),), -1, dtype=np.int32)
+            perturbation_covariates_mask = np.full((len(adata),), -1, dtype=np.int32)
             control_mask = covariate_data[self._control_key]
         else:
             split_covariates_mask = None
             perturbation_covariates_mask = None
-            control_mask = jnp.ones((len(covariate_data),))
+            control_mask = np.ones((len(covariate_data),))
 
-        condition_data: dict[str, list[jnp.ndarray]] = (
+        condition_data: dict[str, list[np.ndarray]] = (
             {i: [] for i in self._covar_to_idx.keys()} if self.is_conditional else {}
         )
 
@@ -455,17 +486,16 @@ class DataManager:
             control_to_perturbation[src_counter] = np.array(conditional_distributions)
             src_counter += 1
 
-        # convert outputs to jax arrays
         if self.is_conditional:
             for pert_cov, emb in condition_data.items():
-                condition_data[pert_cov] = jnp.array(emb)
+                condition_data[pert_cov] = np.array(emb)
         split_covariates_mask = (
-            jnp.asarray(split_covariates_mask)
+            np.asarray(split_covariates_mask)
             if split_covariates_mask is not None
             else None
         )
         perturbation_covariates_mask = (
-            jnp.asarray(perturbation_covariates_mask)
+            np.asarray(perturbation_covariates_mask)
             if perturbation_covariates_mask is not None
             else None
         )
@@ -477,6 +507,177 @@ class DataManager:
             perturbation_idx_to_id=perturbation_idx_to_id,
             condition_data=condition_data,  # type: ignore[arg-type]
             control_to_perturbation=control_to_perturbation,
+            max_combination_length=self._max_combination_length,
+        )
+
+    def _get_condition_data(
+        self,
+        split_cov_combs: np.ndarray | list[list[Any]],
+        adata: anndata.AnnData | None,
+        covariate_data: pd.DataFrame | None = None,
+        rep_dict: dict[str, Any] | None = None,
+        condition_id_key: str | None = None,
+        parallelize: bool = False,
+        n_workers: int | None = None,
+    ) -> ReturnData:
+        # for prediction: adata is None, covariate_data is provided
+        # for training/validation: adata is provided and used to get cell masks, covariate_data is None
+        if adata is None and covariate_data is None:
+            raise ValueError("Either `adata` or `covariate_data` must be provided.")
+        covariate_data = covariate_data if covariate_data is not None else adata.obs  # type: ignore[union-attr]
+        if rep_dict is None:
+            rep_dict = adata.uns if adata is not None else {}
+        # Check if all perturbation/split covariates and control cells are present in the input
+        self._verify_covariate_data(
+            covariate_data,
+            {covar: _to_list(covar) for covar in self._sample_covariates},
+        )
+        self._verify_control_data(adata)
+        self._verify_covariate_data(covariate_data, _to_list(self._split_covariates))
+
+        # Prepare data for parallel processing
+        if condition_id_key is not None:
+            self._verify_condition_id_key(covariate_data, condition_id_key)
+            select_keys = self._perturb_covar_keys + [condition_id_key]
+        else:
+            select_keys = self._perturb_covar_keys
+
+        perturb_covar_df = covariate_data[select_keys].drop_duplicates()
+        if condition_id_key is not None:
+            perturb_covar_df = perturb_covar_df.set_index(condition_id_key)
+        else:
+            perturb_covar_df = perturb_covar_df.reset_index()
+
+        # Update worker_data preparation in DataManager._get_condition_data
+        worker_data = {
+            "perturb_covar_df": perturb_covar_df,
+            "covariate_data": covariate_data,
+            "adata": adata,  # Pass adata to the worker
+            "rep_dict": rep_dict,
+            "control_key": self._control_key,
+            "perturb_covar_keys": self._perturb_covar_keys,
+            "covariate_reps": self._covariate_reps,
+            "max_combination_length": self._max_combination_length,
+            "null_value": self._null_value,
+            "is_categorical": self.is_categorical,
+            "is_conditional": self.is_conditional,
+            "split_covariates": self.split_covariates,
+            "perturbation_covariates": self._perturbation_covariates,
+            "linked_perturb_covars": self.linked_perturb_covars,
+            "primary_group": next(iter(self._perturbation_covariates.keys())) if self._perturbation_covariates else None,
+            "sample_covariates": self.sample_covariates,
+        }
+
+        if parallelize:
+            results = self._process_split_combinations_parallel(
+                split_cov_combs=split_cov_combs, worker_data=worker_data, n_workers=n_workers
+            )
+        else:
+            results = self._process_split_combinations_serial(split_cov_combs=split_cov_combs, worker_data=worker_data)
+
+        # Combine results
+        return self._combine_split_results(results, adata)
+
+    def _process_split_combinations_parallel(
+        self, split_cov_combs: np.ndarray | list[list[Any]], worker_data: dict[str, Any], n_workers: int | None = None
+    ) -> list[dict[str, Any]]:
+        from multiprocessing import Pool
+
+        if n_workers is None:
+            n_workers = min(len(split_cov_combs), os.cpu_count() or 1)
+
+        with Pool(n_workers) as pool:
+            results = pool.starmap(_process_split_combination_worker, [(comb, worker_data) for comb in split_cov_combs])
+        return results
+
+    def _process_split_combinations_serial(
+        self, split_cov_combs: np.ndarray | list[list[Any]], worker_data: dict[str, Any]
+    ) -> list[dict[str, Any]]:
+        return [_process_split_combination_worker(comb, worker_data) for comb in split_cov_combs]
+
+    def _combine_split_results(self, results: list[dict[str, Any]], adata: anndata.AnnData | None) -> ReturnData:
+        # Combine results from all workers
+        combined_condition_data = defaultdict(list)
+        combined_control_to_perturbation = {}
+        combined_perturbation_idx_to_covariates = {}
+        combined_perturbation_idx_to_id = {}
+        combined_split_idx_to_covariates = {}
+
+        # Initialize masks if adata is provided
+        if adata is not None:
+            split_covariates_mask = np.full((len(adata),), -1, dtype=np.int32)
+            perturbation_covariates_mask = np.full((len(adata),), -1, dtype=np.int32)
+            # For each split combination, we need to identify control cells
+            control_mask = adata.obs[self._control_key].values
+        else:
+            split_covariates_mask = None
+            perturbation_covariates_mask = None
+            control_mask = None
+
+        current_tgt_counter = 0
+        for src_counter, result in enumerate(results):
+            # Skip empty results (split combinations with no targets)
+            if not result.get("perturbation_idx_to_covariates", {}):
+                continue
+            # Get split combination information if available
+            if "split_idx_to_covariates" in result:
+                for split_idx, split_covars in result["split_idx_to_covariates"].items():
+                    combined_split_idx_to_covariates[src_counter] = split_covars
+            # If we have adata, update the split_covariates_mask for this combination
+            if adata is not None and "split_combination" in result:
+                # Create mask for this split combination
+                split_combination = result["split_combination"]
+                filter_dict = dict(zip(self._split_covariates, split_combination, strict=False))
+                split_cov_mask = (
+                    adata.obs[list(filter_dict.keys())] == list(filter_dict.values())
+                ).all(axis=1).values
+                # Mark control cells for this split as src_counter
+                control_split_mask = control_mask & split_cov_mask
+                split_covariates_mask[control_split_mask] = src_counter
+
+            n_targets = len(result["perturbation_idx_to_covariates"])
+            # Update control_to_perturbation mapping
+            control_to_perturbation_indices = np.arange(current_tgt_counter, current_tgt_counter + n_targets)
+            combined_control_to_perturbation[src_counter] = control_to_perturbation_indices
+
+            # Update perturbation mappings
+            for i, (covs, cond_id) in enumerate(zip(
+                result["perturbation_idx_to_covariates"].values(), 
+                result["perturbation_idx_to_id"].values()
+            )):
+                target_idx = current_tgt_counter + i
+                combined_perturbation_idx_to_covariates[target_idx] = covs
+                combined_perturbation_idx_to_id[target_idx] = cond_id
+                # If we have adata, update perturbation masks
+                if adata is not None and "cell_masks" in result:
+                    if i < len(result["cell_masks"]):
+                        cell_mask = result["cell_masks"][i]
+                        if cell_mask.sum() > 0:
+                            perturbation_covariates_mask[cell_mask] = target_idx
+
+            # Update condition data
+            for key, data in result.get("condition_data", {}).items():
+                if isinstance(data, list):
+                    combined_condition_data[key].extend(data)
+                else:
+                    combined_condition_data[key].append(data)
+
+            current_tgt_counter += n_targets
+
+        # Convert lists to arrays in condition data
+        if combined_condition_data:
+            for k, v in combined_condition_data.items():
+                if isinstance(v[0], np.ndarray):
+                    combined_condition_data[k] = np.array(v)
+
+        return ReturnData(
+            split_covariates_mask=split_covariates_mask,
+            split_idx_to_covariates=combined_split_idx_to_covariates,
+            perturbation_covariates_mask=perturbation_covariates_mask,
+            perturbation_idx_to_covariates=combined_perturbation_idx_to_covariates,
+            perturbation_idx_to_id=combined_perturbation_idx_to_id,
+            condition_data=combined_condition_data,
+            control_to_perturbation=combined_control_to_perturbation,
             max_combination_length=self._max_combination_length,
         )
 
@@ -508,22 +709,22 @@ class DataManager:
         self,
         adata: anndata.AnnData,
         sample_rep: str | None = None,
-    ) -> jax.Array:
+    ) -> np.ndarray:
         sample_rep = self._sample_rep if sample_rep is None else sample_rep
         if sample_rep == "X":
             sample_rep = adata.X
             if isinstance(sample_rep, sp.csr_matrix):
-                return jnp.asarray(sample_rep.toarray())
+                return np.asarray(sample_rep.toarray())
             else:
-                return jnp.asarray(sample_rep)
+                return np.asarray(sample_rep)
         if isinstance(self._sample_rep, str):
             if self._sample_rep not in adata.obsm:
                 raise KeyError(
                     f"Sample representation '{self._sample_rep}' not found in `adata.obsm`."
                 )
-            return jnp.asarray(adata.obsm[self._sample_rep])
+            return np.asarray(adata.obsm[self._sample_rep])
         attr, key = next(iter(sample_rep.items()))  # type: ignore[union-attr]
-        return jnp.asarray(getattr(adata, attr)[key])
+        return np.asarray(getattr(adata, attr)[key])
 
     def _verify_control_data(self, adata: anndata.AnnData | None) -> None:
         if adata is None:
@@ -576,7 +777,7 @@ class DataManager:
         split_cov_mask = (
             covariate_data[list(filter_dict.keys())] == list(filter_dict.values())
         ).all(axis=1)
-        mask = jnp.array(control_mask * split_cov_mask).astype(bool)
+        mask = np.array(control_mask * split_cov_mask).astype(bool)
         split_covariates_mask[mask] = src_counter
         split_idx_to_covariates[src_counter] = tuple(split_combination)
         return split_covariates_mask, split_idx_to_covariates, split_cov_mask
@@ -586,8 +787,8 @@ class DataManager:
     ) -> tuple[ArrayLike, dict[int, tuple[Any]]]:
         # here we assume that adata only contains source cells
         if len(self.split_covariates) == 0:
-            return jnp.full((len(adata),), 0, dtype=jnp.int32), {}
-        split_covariates_mask = np.full((len(adata),), -1, dtype=jnp.int32)
+            return np.full((len(adata),), 0, dtype=np.int32), {}
+        split_covariates_mask = np.full((len(adata),), -1, dtype=np.int32)
         split_idx_to_covariates: dict[int, Any] = {}
         src_counter = 0
         for split_combination in split_cov_combs:
@@ -598,7 +799,7 @@ class DataManager:
                     split_covariates_mask=split_covariates_mask,
                     split_combination=split_combination,
                     split_idx_to_covariates=split_idx_to_covariates,
-                    control_mask=jnp.ones((adata.n_obs,)),
+                    control_mask=np.ones((adata.n_obs,)),
                     src_counter=src_counter,
                 )
             )
@@ -608,7 +809,7 @@ class DataManager:
                     f"No cells found in `adata` for split covariates {split_combination}."
                 )
             src_counter += 1
-        return jnp.asarray(split_covariates_mask), split_idx_to_covariates
+        return np.asarray(split_covariates_mask), split_idx_to_covariates
 
     @staticmethod
     def _verify_perturbation_covariates(
@@ -846,28 +1047,6 @@ class DataManager:
                         f"Perturbation covariates `{covariate}` should be numeric/boolean, found categorical."
                     )
 
-    @staticmethod
-    def _check_shape(arr: float | ArrayLike) -> ArrayLike:
-        if not hasattr(arr, "shape") or len(arr.shape) == 0:
-            return jnp.ones((1, 1)) * arr
-        if arr.ndim == 1:  # type: ignore[union-attr]
-            return jnp.expand_dims(arr, 0)
-        elif arr.ndim == 2:  # type: ignore[union-attr]
-            if arr.shape[0] == 1:
-                return arr  # type: ignore[return-value]
-            if arr.shape[1] == 1:
-                return jnp.transpose(arr)
-            raise ValueError(
-                "Condition representation has an unexpected shape. Should be (1, n_features) or (n_features, )."
-            )
-        elif arr.ndim > 2:  # type: ignore[union-attr]
-            raise ValueError(
-                "Condition representation has too many dimensions. Should be 1 or 2."
-            )
-
-        raise ValueError(
-            "Condition representation as an unexpected format. Expected an array of shape (1, n_features) or (n_features, )."
-        )
 
     @staticmethod
     def _get_covar_to_idx(covariate_groups: dict[str, Sequence[str]]) -> dict[str, int]:
@@ -877,26 +1056,17 @@ class DataManager:
         covar_to_idx = {v: k for k, v in idx_to_covar.items()}
         return covar_to_idx
 
-    @staticmethod
-    def _pad_to_max_length(
-        arr: jax.Array, max_combination_length: int, null_value: Any
-    ) -> jax.Array:
-        if arr.shape[0] < max_combination_length:
-            null_arr = jnp.full(
-                (max_combination_length - arr.shape[0], arr.shape[1]), null_value
-            )
-            arr = jnp.concatenate([arr, null_arr], axis=0)
-        return arr
+
 
     def _get_perturbation_covariates(
         self,
         condition_data: pd.DataFrame,
         rep_dict: dict[str, dict[str, ArrayLike]],
-        perturb_covariates: Any,  # TODO: check if we can save as attribtue
-    ) -> dict[str, jax.Array]:
+        perturb_covariates: Any, 
+    ) -> dict[str, np.ndarray]:
         primary_group, primary_covars = next(iter(perturb_covariates.items()))
 
-        perturb_covar_emb: dict[str, list[jax.Array]] = {
+        perturb_covar_emb: dict[str, list[np.ndarray]] = {
             group: [] for group in perturb_covariates
         }
         for primary_cov in primary_covars:
@@ -908,9 +1078,9 @@ class DataManager:
                     raise ValueError(
                         f"Representation for '{cov_name}' not found in `adata.uns['{rep_key}']`."
                     )
-                prim_arr = jnp.asarray(rep_dict[rep_key][cov_name])
+                prim_arr = np.asarray(rep_dict[rep_key][cov_name])
             else:
-                prim_arr = jnp.asarray(
+                prim_arr = np.asarray(
                     self.primary_one_hot_encoder.transform(  # type: ignore[union-attr]
                         np.array(cov_name).reshape(-1, 1)
                     )
@@ -919,15 +1089,15 @@ class DataManager:
             if not self.is_categorical:
                 prim_arr *= value
 
-            prim_arr = self._check_shape(prim_arr)
+            prim_arr = _check_shape(prim_arr)
             perturb_covar_emb[primary_group].append(prim_arr)
 
             for linked_covar in self._linked_perturb_covars[primary_cov].items():
                 linked_group, linked_cov = list(linked_covar)
 
                 if linked_cov is None:
-                    linked_arr = jnp.full((1, 1), self._null_value)
-                    linked_arr = self._check_shape(linked_arr)
+                    linked_arr = np.full((1, 1), self._null_value)
+                    linked_arr = _check_shape(linked_arr)
                     perturb_covar_emb[linked_group].append(linked_arr)
                     continue
 
@@ -939,23 +1109,23 @@ class DataManager:
                         raise ValueError(
                             f"Representation for '{cov_name}' not found in `adata.uns['{linked_group}']`."
                         )
-                    linked_arr = jnp.asarray(rep_dict[rep_key][cov_name])
+                    linked_arr = np.asarray(rep_dict[rep_key][cov_name])
                 else:
-                    linked_arr = jnp.asarray(condition_data[linked_cov])
+                    linked_arr = np.asarray(condition_data[linked_cov])
 
-                linked_arr = self._check_shape(linked_arr)
+                linked_arr = _check_shape(linked_arr)
                 perturb_covar_emb[linked_group].append(linked_arr)
 
         perturb_covar_emb = {
-            k: self._pad_to_max_length(
-                jnp.concatenate(v, axis=0),
+            k: _pad_to_max_length(
+                np.concatenate(v, axis=0),
                 self._max_combination_length,
                 self._null_value,
             )
             for k, v in perturb_covar_emb.items()
         }
 
-        sample_covar_emb: dict[str, jax.Array] = {}
+        sample_covar_emb: dict[str, np.ndarray] = {}
         for sample_cov in self._sample_covariates:
             value = condition_data[sample_cov]
             if sample_cov in self._covariate_reps:
@@ -964,12 +1134,12 @@ class DataManager:
                     raise ValueError(
                         f"Representation for '{value}' not found in `adata.uns['{sample_cov}']`."
                     )
-                cov_arr = jnp.asarray(rep_dict[rep_key][value])
+                cov_arr = np.asarray(rep_dict[rep_key][value])
             else:
-                cov_arr = jnp.asarray(value)
+                cov_arr = np.asarray(value)
 
-            cov_arr = self._check_shape(cov_arr)
-            sample_covar_emb[sample_cov] = jnp.tile(
+            cov_arr = _check_shape(cov_arr)
+            sample_covar_emb[sample_cov] = np.tile(
                 cov_arr, (self._max_combination_length, 1)
             )
 

@@ -1,9 +1,9 @@
 from collections.abc import Callable
-from dataclasses import dataclass
+from dataclasses import dataclass, field
 from typing import Any
 
-import jax
 import jax.numpy as jnp
+import numpy as np
 
 from cfp._types import ArrayLike
 
@@ -18,14 +18,44 @@ __all__ = [
 
 @dataclass
 class ReturnData:  # TODO: this should rather be a NamedTuple
-    split_covariates_mask: jnp.ndarray | None
+    split_covariates_mask: np.ndarray | None
     split_idx_to_covariates: dict[int, tuple[Any, ...]]
-    perturbation_covariates_mask: jnp.ndarray | None
+    perturbation_covariates_mask: np.ndarray | None
     perturbation_idx_to_covariates: dict[int, tuple[Any, ...]]
     perturbation_idx_to_id: dict[int, Any]
     condition_data: dict[str, ArrayLike]
     control_to_perturbation: dict[int, ArrayLike]
     max_combination_length: int
+
+
+class ArrayConversionMixin:
+    """Mixin for converting numpy arrays to jax arrays."""
+
+    def __post_init__(self, convert_to_jax: bool = True) -> None:
+        """Convert numpy arrays to jax arrays after initialization.
+
+        Parameters
+        ----------
+        convert_to_jax
+            Whether to convert numpy arrays to jax arrays.
+        """
+        if not convert_to_jax:
+            return
+
+        # Convert array attributes to jax arrays
+        for attr_name, attr_value in self.__dict__.items():
+            if isinstance(attr_value, np.ndarray):
+                setattr(self, attr_name, jnp.array(attr_value))
+            elif isinstance(attr_value, dict) and attr_name == "condition_data":
+                # Handle condition_data dictionary specifically
+                for key, val in attr_value.items():
+                    if isinstance(val, np.ndarray):
+                        attr_value[key] = jnp.array(val)
+            elif isinstance(attr_value, dict) and attr_name == "control_to_perturbation":
+                # Handle control_to_perturbation dictionary
+                for key, val in attr_value.items():
+                    if isinstance(val, np.ndarray):
+                        attr_value[key] = jnp.array(val)
 
 
 class BaseDataMixin:
@@ -58,7 +88,7 @@ class BaseDataMixin:
 
 
 @dataclass
-class ConditionData(BaseDataMixin):
+class ConditionData(BaseDataMixin, ArrayConversionMixin):
     """Data container containing condition embeddings.
 
     Parameters
@@ -71,6 +101,8 @@ class ConditionData(BaseDataMixin):
         Token to use for masking `null_value`.
     data_manager
         Data manager used to generate the data.
+    convert_to_jax
+        Whether to convert numpy arrays to jax arrays.
     """
 
     condition_data: dict[str, ArrayLike]
@@ -79,10 +111,14 @@ class ConditionData(BaseDataMixin):
     perturbation_idx_to_id: dict[int, Any]
     null_value: Any
     data_manager: Any
+    convert_to_jax: bool = field(default=True, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        super().__post_init__(self.convert_to_jax)
 
 
 @dataclass
-class TrainingData(BaseDataMixin):
+class TrainingData(BaseDataMixin, ArrayConversionMixin):
     """Training data.
 
     Parameters
@@ -105,18 +141,16 @@ class TrainingData(BaseDataMixin):
         Maximum number of covariates in a combination.
     data_manager
         The data manager
+    convert_to_jax
+        Whether to convert numpy arrays to jax arrays.
     """
 
-    cell_data: jax.Array  # (n_cells, n_features)
-    split_covariates_mask: (
-        jax.Array
-    )  # (n_cells,), which cell assigned to which source distribution
+    cell_data: ArrayLike  # (n_cells, n_features)
+    split_covariates_mask: ArrayLike  # (n_cells,), which cell assigned to which source distribution
     split_idx_to_covariates: dict[
         int, tuple[Any, ...]
     ]  # (n_sources,) dictionary explaining split_covariates_mask
-    perturbation_covariates_mask: (
-        jax.Array
-    )  # (n_cells,), which cell assigned to which target distribution
+    perturbation_covariates_mask: ArrayLike  # (n_cells,), which cell assigned to which target distribution
     perturbation_idx_to_covariates: dict[
         int, tuple[str, ...]
     ]  # (n_targets,), dictionary explaining perturbation_covariates_mask
@@ -128,10 +162,14 @@ class TrainingData(BaseDataMixin):
     max_combination_length: int
     null_value: Any
     data_manager: Any
+    convert_to_jax: bool = field(default=True, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        super().__post_init__(self.convert_to_jax)
 
 
 @dataclass
-class ValidationData(BaseDataMixin):
+class ValidationData(BaseDataMixin, ArrayConversionMixin):
     """Data container for the validation data.
 
     Parameters
@@ -160,35 +198,37 @@ class ValidationData(BaseDataMixin):
     n_conditions_on_train_end
         Number of conditions to use for computation callbacks at the end of training.
         If :obj:`None`, use all conditions.
+convert_to_jax
+        Whether to convert numpy arrays to jax arrays.
     """
 
-    cell_data: jax.Array  # (n_cells, n_features)
-    split_covariates_mask: (
-        jax.Array
-    )  # (n_cells,), which cell assigned to which source distribution
+    cell_data: ArrayLike  # (n_cells, n_features)
+    split_covariates_mask: ArrayLike  # (n_cells,), which cell assigned to which source distribution
     split_idx_to_covariates: dict[
         int, tuple[Any, ...]
     ]  # (n_sources,) dictionary explaining split_covariates_mask
-    perturbation_covariates_mask: (
-        jax.Array
-    )  # (n_cells,), which cell assigned to which target distribution
+    perturbation_covariates_mask: ArrayLike  # (n_cells,), which cell assigned to which target distribution
     perturbation_idx_to_covariates: dict[
         int, tuple[str, ...]
     ]  # (n_targets,), dictionary explaining perturbation_covariates_mask
     perturbation_idx_to_id: dict[int, Any]
     condition_data: dict[str, ArrayLike]  # (n_targets,) all embeddings for conditions
     control_to_perturbation: dict[
-        int, jax.Array
+        int, ArrayLike
     ]  # mapping from control idx to target distribution idcs
     max_combination_length: int
     null_value: Any
     data_manager: Any
     n_conditions_on_log_iteration: int | None = None
     n_conditions_on_train_end: int | None = None
+    convert_to_jax: bool = field(default=True, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        super().__post_init__(self.convert_to_jax)
 
 
 @dataclass
-class PredictionData(BaseDataMixin):
+class PredictionData(BaseDataMixin, ArrayConversionMixin):
     """Data container to perform prediction.
 
     Parameters
@@ -205,12 +245,12 @@ class PredictionData(BaseDataMixin):
         Maximum number of covariates in a combination.
     null_value
         Token to use for masking ``null_value``.
+    convert_to_jax
+        Whether to convert numpy arrays to jax arrays.
     """
 
-    cell_data: jax.Array  # (n_cells, n_features)
-    split_covariates_mask: (
-        jax.Array
-    )  # (n_cells,), which cell assigned to which source distribution
+    cell_data: ArrayLike  # (n_cells, n_features)
+    split_covariates_mask: ArrayLike  # (n_cells,), which cell assigned to which source distribution
     split_idx_to_covariates: dict[
         int, tuple[Any, ...]
     ]  # (n_sources,) dictionary explaining split_covariates_mask
@@ -223,3 +263,7 @@ class PredictionData(BaseDataMixin):
     max_combination_length: int
     null_value: Any
     data_manager: Any
+    convert_to_jax: bool = field(default=True, repr=False, compare=False)
+
+    def __post_init__(self) -> None:
+        super().__post_init__(self.convert_to_jax)
