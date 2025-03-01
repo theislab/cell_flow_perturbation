@@ -30,6 +30,7 @@ class TestDataManager:
     @pytest.mark.parametrize("perturbation_covariates", perturbation_covariates_args)
     @pytest.mark.parametrize("perturbation_covariate_reps", [{}, {"drug": "drug"}])
     @pytest.mark.parametrize("sample_covariates", [[], ["dosage_c"]])
+    @pytest.mark.parametrize("parallelize", [True, False])
     def test_init_DataManager(
         self,
         adata_perturbation: ad.AnnData,
@@ -38,6 +39,7 @@ class TestDataManager:
         perturbation_covariates,
         perturbation_covariate_reps,
         sample_covariates,
+        parallelize,
     ):
         from cfp.data._datamanager import DataManager
 
@@ -151,6 +153,7 @@ class TestDataManager:
     @pytest.mark.parametrize("perturbation_covariates", perturbation_covariates_args)
     @pytest.mark.parametrize("perturbation_covariate_reps", [{}, {"drug": "drug"}])
     @pytest.mark.parametrize("sample_covariates", [[], ["dosage_c"]])
+    @pytest.mark.parametrize("parallelize", [True, False])
     def test_get_train_data(
         self,
         adata_perturbation: ad.AnnData,
@@ -159,6 +162,7 @@ class TestDataManager:
         perturbation_covariates,
         perturbation_covariate_reps,
         sample_covariates,
+        parallelize,
     ):
         from cfp.data._data import TrainingData
         from cfp.data._datamanager import DataManager
@@ -179,7 +183,7 @@ class TestDataManager:
         assert dm._perturbation_covariates == perturbation_covariates
         assert dm._sample_covariates == sample_covariates
 
-        train_data = dm.get_train_data(adata_perturbation)
+        train_data = dm.get_train_data(adata_perturbation, parallelize=parallelize)
         assert isinstance(train_data, TrainingData)
         assert isinstance(train_data, TrainingData)
         assert (
@@ -194,7 +198,8 @@ class TestDataManager:
             )
 
         assert isinstance(train_data.condition_data, dict)
-        assert isinstance(list(train_data.condition_data.values())[0], np.ndarray)
+        # Check for JAX arrays instead of NumPy arrays
+        assert isinstance(list(train_data.condition_data.values())[0], jax.Array)
         assert train_data.max_combination_length == 1
 
         if sample_covariates == [] and perturbation_covariates == {"drug": ("drug1",)}:
@@ -203,10 +208,11 @@ class TestDataManager:
                 == (len(adata_perturbation.obs["drug1"].cat.categories) - 1)
                 * train_data.n_controls
             )
-        assert isinstance(train_data.cell_data, np.ndarray)
-        assert isinstance(train_data.split_covariates_mask, np.ndarray)
+        # Check for JAX arrays instead of NumPy arrays
+        assert isinstance(train_data.cell_data, jax.Array)
+        assert isinstance(train_data.split_covariates_mask, jax.Array)
         assert isinstance(train_data.split_idx_to_covariates, dict)
-        assert isinstance(train_data.perturbation_covariates_mask, np.ndarray)
+        assert isinstance(train_data.perturbation_covariates_mask, jax.Array)
         assert isinstance(train_data.perturbation_idx_to_covariates, dict)
         assert isinstance(train_data.control_to_perturbation, dict)
 
@@ -215,12 +221,14 @@ class TestDataManager:
         "perturbation_covariates", perturbation_covariate_comb_args
     )
     @pytest.mark.parametrize("perturbation_covariate_reps", [{}, {"drug": "drug"}])
+    @pytest.mark.parametrize("parallelize", [True, False])
     def test_get_train_data_with_combinations(
         self,
         adata_perturbation: ad.AnnData,
         split_covariates,
         perturbation_covariates,
         perturbation_covariate_reps,
+        parallelize,
     ):
         from cfp.data._datamanager import DataManager
 
@@ -235,7 +243,7 @@ class TestDataManager:
             sample_covariate_reps={"cell_type": "cell_type"},
         )
 
-        train_data = dm.get_train_data(adata_perturbation)
+        train_data = dm.get_train_data(adata_perturbation, parallelize=parallelize)
 
         assert (
             (train_data.perturbation_covariates_mask == -1)
@@ -250,7 +258,8 @@ class TestDataManager:
             )
 
         assert isinstance(train_data.condition_data, dict)
-        assert isinstance(list(train_data.condition_data.values())[0], np.ndarray)
+        # Check for JAX arrays instead of NumPy arrays
+        assert isinstance(list(train_data.condition_data.values())[0], jax.numpy.ndarray)
         assert train_data.max_combination_length == len(perturbation_covariates["drug"])
 
         for k in perturbation_covariates.keys():
@@ -279,10 +288,11 @@ class TestDataManager:
                 == adata_perturbation.uns[k][cov_name].shape[0]
             )
 
-        assert isinstance(train_data.cell_data, np.ndarray)
-        assert isinstance(train_data.split_covariates_mask, np.ndarray)
+        # Check for JAX arrays instead of NumPy arrays
+        assert isinstance(train_data.cell_data, jax.numpy.ndarray)
+        assert isinstance(train_data.split_covariates_mask, jax.numpy.ndarray)
         assert isinstance(train_data.split_idx_to_covariates, dict)
-        assert isinstance(train_data.perturbation_covariates_mask, np.ndarray)
+        assert isinstance(train_data.perturbation_covariates_mask, jax.numpy.ndarray)
         assert isinstance(train_data.perturbation_idx_to_covariates, dict)
         assert isinstance(train_data.control_to_perturbation, dict)
 
@@ -356,16 +366,16 @@ class TestValidationData:
 
         val_data = dm.get_validation_data(adata_perturbation)
 
-        assert isinstance(val_data.cell_data, np.ndarray)
-        assert isinstance(val_data.split_covariates_mask, np.ndarray)
+        assert isinstance(val_data.cell_data, jax.Array)
+        assert isinstance(val_data.split_covariates_mask, jax.Array)
         assert isinstance(val_data.split_idx_to_covariates, dict)
-        assert isinstance(val_data.perturbation_covariates_mask, np.ndarray)
+        assert isinstance(val_data.perturbation_covariates_mask, jax.Array)
         assert isinstance(val_data.perturbation_idx_to_covariates, dict)
         assert isinstance(val_data.control_to_perturbation, dict)
         assert val_data.max_combination_length == len(perturbation_covariates["drug"])
 
         assert isinstance(val_data.condition_data, dict)
-        assert isinstance(list(val_data.condition_data.values())[0], np.ndarray)
+        assert isinstance(list(val_data.condition_data.values())[0], jax.Array)
 
         if sample_covariates == [] and perturbation_covariates == {"drug": ("drug1",)}:
             assert (
@@ -447,15 +457,15 @@ class TestPredictionData:
             n_workers=4 if parallelize else None
         )
 
-        assert isinstance(pred_data.cell_data, np.ndarray)
-        assert isinstance(pred_data.split_covariates_mask, np.ndarray)
+        assert isinstance(pred_data.cell_data, jax.Array)
+        assert isinstance(pred_data.split_covariates_mask, jax.Array)
         assert isinstance(pred_data.split_idx_to_covariates, dict)
         assert isinstance(pred_data.perturbation_idx_to_covariates, dict)
         assert isinstance(pred_data.control_to_perturbation, dict)
         assert pred_data.max_combination_length == len(perturbation_covariates["drug"])
 
         assert isinstance(pred_data.condition_data, dict)
-        assert isinstance(list(pred_data.condition_data.values())[0], np.ndarray)
+        assert isinstance(list(pred_data.condition_data.values())[0], jax.Array)
 
         if sample_covariates == [] and perturbation_covariates == {"drug": ("drug1",)}:
             assert (
