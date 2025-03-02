@@ -1,16 +1,13 @@
 import os
 from collections import defaultdict
 from collections.abc import Sequence
-from typing import Any, Literal, Union
+from typing import Any, Literal
 
 import anndata
 import numpy as np
 import pandas as pd
 import scipy.sparse as sp
 import sklearn.preprocessing as preprocessing
-from dask import dataframe as dd
-import dask
-from dask.diagnostics import ProgressBar
 from pandas.api.types import is_numeric_dtype
 from tqdm import tqdm
 
@@ -353,7 +350,7 @@ class DataManager:
         covariate_data: pd.DataFrame | None = None,
         rep_dict: dict[str, Any] | None = None,
         condition_id_key: str | None = None,
-        algorithm: Literal["old", "dask", "parallel", "mask"] = "old",
+        algorithm: Literal["old", "dask", "parallel", "mask"] = "mask",
     ) -> ReturnData:
         if algorithm == "old":
             return self._get_condition_data_old(
@@ -1000,8 +997,9 @@ class DataManager:
             else:
                 pc_df = perturb_covar_df
 
+            pbar = tqdm(pc_df.iterrows(), total=pc_df.shape[0], desc="Perturbation combinations")
             # Iterate over target conditions - without tqdm progress bar for simplicity
-            for i, tgt_cond in enumerate(pc_df.iterrows()):
+            for i, tgt_cond in enumerate(pbar):
                 idx, tgt_cond_data = tgt_cond
                 tgt_cond_data = tgt_cond_data[self._perturb_covar_keys]
 
