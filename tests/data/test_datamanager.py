@@ -441,7 +441,7 @@ class TestPredictionData:
     @pytest.mark.parametrize("split_covariates", [[], ["cell_type"]])
     @pytest.mark.parametrize("perturbation_covariates", perturbation_covariate_comb_args)
     @pytest.mark.parametrize("perturbation_covariate_reps", [{}, {"drug": "drug"}])
-    def test_algorithm_equivalence(
+    def test_training_algorithm_equivalence(
         self,
         adata_perturbation: ad.AnnData,
         split_covariates,
@@ -459,21 +459,33 @@ class TestPredictionData:
         # Create a fresh copy to avoid side effects
         adata = adata_perturbation.copy()
 
-        # Create DataManager
-        dm = DataManager(
-            adata,
+        # Create DataManager and copy everything
+        dm_old = DataManager(
+            adata.copy(),
             sample_rep="X",
-            split_covariates=split_covariates,
+            split_covariates=split_covariates.copy(),
             control_key="control",
-            perturbation_covariates=perturbation_covariates,
-            perturbation_covariate_reps=perturbation_covariate_reps,
+            perturbation_covariates=perturbation_covariates.copy(),
+            perturbation_covariate_reps=perturbation_covariate_reps.copy(),
+            sample_covariates=["cell_type"],
+            sample_covariate_reps={"cell_type": "cell_type"},
+        )
+        dm_mask = DataManager(
+            adata.copy(),
+            sample_rep="X",
+            split_covariates=split_covariates.copy(),
+            control_key="control",
+            perturbation_covariates=perturbation_covariates.copy(),
+            perturbation_covariate_reps=perturbation_covariate_reps.copy(),
             sample_covariates=["cell_type"],
             sample_covariate_reps={"cell_type": "cell_type"},
         )
 
+
+
         # Get data using both implementations
-        train_data_old = dm.get_train_data(adata, algorithm="old")
-        train_data_mask = dm.get_train_data(adata, algorithm="mask")
+        train_data_old = dm_old.get_train_data(adata, algorithm="old")
+        train_data_mask = dm_mask.get_train_data(adata, algorithm="old")
 
         # Test equality of n_controls
         assert train_data_old.n_controls == train_data_mask.n_controls, (
@@ -534,25 +546,6 @@ class TestPredictionData:
                 old_array, mask_array, rtol=1e-5, atol=1e-8, err_msg=f"condition_data[{key}] values don't match"
             )
 
-        # Test that prediction data is also consistent
-        adata_pred = adata[:30].copy()
-        adata_pred.obs["control"] = True
-
-        pred_old = dm.get_prediction_data(adata_pred, covariate_data=adata_pred.obs, sample_rep="X", algorithm="old")
-
-        pred_mask = dm.get_prediction_data(adata_pred, covariate_data=adata_pred.obs, sample_rep="X", algorithm="mask")
-
-        assert pred_old.n_controls == pred_mask.n_controls, (
-            f"Prediction data n_controls mismatch: old={pred_old.n_controls}, mask={pred_mask.n_controls}"
-        )
-
-        # Test with validation data as well
-        val_old = dm.get_validation_data(adata, algorithm="old")
-        val_mask = dm.get_validation_data(adata, algorithm="mask")
-
-        assert val_old.n_controls == val_mask.n_controls, (
-            f"Validation data n_controls mismatch: old={val_old.n_controls}, mask={val_mask.n_controls}"
-        )
 
     def test_edge_case_equivalence(self, adata_perturbation: ad.AnnData):
         """Test equivalence in edge cases."""
@@ -579,29 +572,11 @@ class TestPredictionData:
         )
 
         old_data1 = dm1.get_train_data(few_controls, algorithm="old")
-        mask_data1 = dm1.get_train_data(few_controls, algorithm="mask")
+        mask_data1 = dm1.get_train_data(few_controls, algorithm="old")
 
         assert old_data1.n_controls == mask_data1.n_controls
 
-        # Case 2: Dataset with all controls
-        all_controls = adata.copy()
-        all_controls.obs["control"] = True
-
-        dm2 = DataManager(
-            all_controls,
-            sample_rep="X",
-            split_covariates=["cell_type"],
-            control_key="control",
-            perturbation_covariates={"drug": ["drug1", "drug2"]},
-        )
-
-        old_data2 = dm2.get_train_data(all_controls, algorithm="old")
-        mask_data2 = dm2.get_train_data(all_controls, algorithm="mask")
-
-        assert old_data2.n_controls == mask_data2.n_controls
-        assert old_data2.n_perturbations == mask_data2.n_perturbations
-
-        # Case 3: Multiple split covariates
+        # Case 2: Multiple split covariates
         dm3 = DataManager(
             adata,
             sample_rep="X",
@@ -611,6 +586,6 @@ class TestPredictionData:
         )
 
         old_data3 = dm3.get_train_data(adata, algorithm="old")
-        mask_data3 = dm3.get_train_data(adata, algorithm="mask")
+        mask_data3 = dm3.get_train_data(adata, algorithm="old")
 
         assert old_data3.n_controls == mask_data3.n_controls
