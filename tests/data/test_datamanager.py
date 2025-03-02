@@ -23,6 +23,10 @@ perturbation_covariate_comb_args = [
     },
 ]
 
+@pytest.fixture(params=["old", "mask"])
+def algorithm(request):
+    return request.param
+
 
 class TestDataManager:
     @pytest.mark.parametrize("sample_rep", ["X", "X_pca"])
@@ -30,7 +34,6 @@ class TestDataManager:
     @pytest.mark.parametrize("perturbation_covariates", perturbation_covariates_args)
     @pytest.mark.parametrize("perturbation_covariate_reps", [{}, {"drug": "drug"}])
     @pytest.mark.parametrize("sample_covariates", [[], ["dosage_c"]])
-    @pytest.mark.parametrize("parallelize", [True, False])
     def test_init_DataManager(
         self,
         adata_perturbation: ad.AnnData,
@@ -39,7 +42,6 @@ class TestDataManager:
         perturbation_covariates,
         perturbation_covariate_reps,
         sample_covariates,
-        parallelize,
     ):
         from cfp.data._datamanager import DataManager
 
@@ -153,7 +155,6 @@ class TestDataManager:
     @pytest.mark.parametrize("perturbation_covariates", perturbation_covariates_args)
     @pytest.mark.parametrize("perturbation_covariate_reps", [{}, {"drug": "drug"}])
     @pytest.mark.parametrize("sample_covariates", [[], ["dosage_c"]])
-    @pytest.mark.parametrize("parallelize", [True, False])
     def test_get_train_data(
         self,
         adata_perturbation: ad.AnnData,
@@ -162,7 +163,7 @@ class TestDataManager:
         perturbation_covariates,
         perturbation_covariate_reps,
         sample_covariates,
-        parallelize,
+        algorithm,
     ):
         from cfp.data._data import TrainingData
         from cfp.data._datamanager import DataManager
@@ -183,7 +184,7 @@ class TestDataManager:
         assert dm._perturbation_covariates == perturbation_covariates
         assert dm._sample_covariates == sample_covariates
 
-        train_data = dm.get_train_data(adata_perturbation, parallelize=parallelize)
+        train_data = dm.get_train_data(adata_perturbation, algorithm=algorithm)
         assert isinstance(train_data, TrainingData)
         assert isinstance(train_data, TrainingData)
         assert (
@@ -221,14 +222,13 @@ class TestDataManager:
         "perturbation_covariates", perturbation_covariate_comb_args
     )
     @pytest.mark.parametrize("perturbation_covariate_reps", [{}, {"drug": "drug"}])
-    @pytest.mark.parametrize("parallelize", [True, False])
     def test_get_train_data_with_combinations(
         self,
         adata_perturbation: ad.AnnData,
         split_covariates,
         perturbation_covariates,
         perturbation_covariate_reps,
-        parallelize,
+        algorithm,
     ):
         from cfp.data._datamanager import DataManager
 
@@ -243,7 +243,7 @@ class TestDataManager:
             sample_covariate_reps={"cell_type": "cell_type"},
         )
 
-        train_data = dm.get_train_data(adata_perturbation, parallelize=parallelize)
+        train_data = dm.get_train_data(adata_perturbation, algorithm=algorithm)
 
         assert (
             (train_data.perturbation_covariates_mask == -1)
@@ -346,6 +346,7 @@ class TestValidationData:
         split_covariates,
         perturbation_covariates,
         perturbation_covariate_reps,
+        algorithm,
     ):
         from cfp.data._datamanager import DataManager
 
@@ -364,7 +365,7 @@ class TestValidationData:
             sample_covariate_reps=sample_covariate_reps,
         )
 
-        val_data = dm.get_validation_data(adata_perturbation)
+        val_data = dm.get_validation_data(adata_perturbation, algorithm=algorithm)
 
         assert isinstance(val_data.cell_data, jax.Array)
         assert isinstance(val_data.split_covariates_mask, jax.Array)
@@ -385,7 +386,7 @@ class TestValidationData:
             )
 
     @pytest.mark.skip(reason="To discuss: why should it raise an error?")
-    def test_raises_wrong_max_combination_length(self, adata_perturbation):
+    def test_raises_wrong_max_combination_length(self, adata_perturbation, algorithm):
         from cfp.data._datamanager import DataManager
 
         max_combination_length = 3
@@ -410,11 +411,10 @@ class TestValidationData:
                 max_combination_length=max_combination_length,
             )
 
-            _ = dm.get_validation_data(adata_perturbation)
+            _ = dm.get_validation_data(adata_perturbation, algorithm=algorithm)
 
 
 class TestPredictionData:
-    @pytest.mark.parametrize("parallelize", [True, False])
     @pytest.mark.parametrize("sample_rep", ["X", "X_pca"])
     @pytest.mark.parametrize("split_covariates", [[], ["cell_type"]])
     @pytest.mark.parametrize(
@@ -424,7 +424,7 @@ class TestPredictionData:
     def test_get_prediction_data(
         self,
         adata_perturbation: ad.AnnData,
-        parallelize: bool,
+        algorithm: str,
         sample_rep,
         split_covariates,
         perturbation_covariates,
@@ -453,8 +453,7 @@ class TestPredictionData:
             adata_pred,
             covariate_data=adata_pred.obs,
             sample_rep=sample_rep,
-            parallelize=parallelize,
-            n_workers=4 if parallelize else None
+            algorithm=algorithm,
         )
 
         assert isinstance(pred_data.cell_data, jax.Array)
