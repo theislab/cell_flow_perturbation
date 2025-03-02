@@ -931,15 +931,13 @@ class DataManager:
         _covariate_data = covariate_data[self._perturb_covar_keys].copy()
         _covariate_data["cell_index"] = _covariate_data.index.astype(int)
 
-        # More explicit merge operation
+        # Use pandas merge to find cell indices for each perturbation combination
         _perturb_covar_merged = pd.merge(_perturb_covar_df, _covariate_data, on=self._perturb_covar_keys, how="inner")
 
         # Create explicit dictionary mapping of row_id to cell indices
         perturb_covar_to_cells = {}
         for row_id, group in _perturb_covar_merged.groupby("row_id"):
             perturb_covar_to_cells[row_id] = group["cell_index"].tolist()
-
-        # Initialize data containers - same as original but with explicit typing
         if adata is not None:
             split_covariates_mask = np.full((len(adata),), -1, dtype=np.int32)
             perturbation_covariates_mask = np.full((len(adata),), -1, dtype=np.int32)
@@ -1029,7 +1027,7 @@ class DataManager:
                 if condition_id_key is not None:
                     perturbation_idx_to_id[tgt_counter] = idx
 
-                # Calculate embeddings sequentially (no Dask)
+                # Calculate embeddings
                 if self.is_conditional:
                     embedding = self._get_perturbation_covariates(
                         condition_data=tgt_cond_data,
@@ -1041,15 +1039,19 @@ class DataManager:
 
                 tgt_counter += 1
 
-            # Map source (control) to target condition ids - only if we have targets
-            if conditional_distributions:
-                control_to_perturbation[src_counter] = np.array(conditional_distributions)
-                src_counter += 1
+            # CRITICAL FIX: Always add the split combination to control_to_perturbation
+            # This ensures all control sources are counted correctly
+            control_to_perturbation[src_counter] = np.array(conditional_distributions)
+            src_counter += 1
 
         # Convert lists to arrays
         if self.is_conditional:
             for pert_cov, emb in condition_data.items():
-                condition_data[pert_cov] = np.array(emb)
+                if emb:  # Only convert if there are embeddings
+                    condition_data[pert_cov] = np.array(emb)
+                else:
+                    # Handle empty embeddings
+                    condition_data[pert_cov] = np.empty((0, self._max_combination_length, 0))
 
         # Ensure proper return types
         split_covariates_mask = np.asarray(split_covariates_mask) if split_covariates_mask is not None else None
