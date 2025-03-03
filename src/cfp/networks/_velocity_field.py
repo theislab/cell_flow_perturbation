@@ -263,18 +263,32 @@ class ConditionalVelocityField(nn.Module):
     def output_dims(self):
         """Dimensions of the output layers."""
         return tuple(self.decoder_dims) + (self.output_dim,)
-
     @property
     def time_encoder(self):
         """The time encoder used."""
-        return self.time_encoder
+        return self._time_encoder
+    
+    @time_encoder.setter
+    def time_encoder(self, encoder):
+        """Set the time encoder."""
+        self._time_encoder = encoder
     
     @property
     def x_encoder(self):
         """The x encoder used."""
-        return self.x_encoder
+        return self._x_encoder
+    
+    @x_encoder.setter
+    def x_encoder(self, encoder):
+        """Set the x encoder."""
+        self._x_encoder = encoder
     
     @property
     def decoder(self):
         """The decoder used."""
-        return self.decoder
+        return self._decoder
+    
+    @decoder.setter
+    def decoder(self, decoder):
+        """Set the decoder."""
+        self._decoder = decoder

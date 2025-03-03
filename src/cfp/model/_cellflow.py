@@ -827,7 +827,17 @@ class CellFlow:
     @property
     def train_data(self) -> TrainingData | None:
         """The training data."""
-        return self.train_data
+        return self._train_data
+
+    @train_data.setter
+    def train_data(self, data: TrainingData) -> None:
+        """Set the training data."""
+        if not isinstance(data, TrainingData):
+            raise ValueError(
+                f"Expected `data` to be an instance of `TrainingData`, found `{type(data)}`."
+            )
+        self._train_data = data
+
 
     @velocity_field.setter
     def velocity_field(self, vf: ConditionalVelocityField) -> None:
