@@ -352,6 +352,10 @@ class DataManager:
         else:
             perturb_covar_df = perturb_covar_df.reset_index()
 
+        orig_index = covariate_data.index
+        # TODO do something with orig_index
+        del orig_index
+        covariate_data.index = np.arange(len(covariate_data))
         # get indices of cells belonging to each unique condition
         _perturb_covar_df, _covariate_data = (
             perturb_covar_df[self._perturb_covar_keys],
@@ -422,10 +426,10 @@ class DataManager:
 
                 # for train/validation, only extract covariate combinations that are present in adata
                 if adata is not None:
-                    mask = covariate_data.index.isin(perturb_covar_to_cells[i])
-                    mask *= (1 - control_mask) * split_cov_mask
-                    mask = np.array(mask == 1)
-                    if mask.sum() == 0:
+                    mask = np.zeros(len(adata), dtype=bool)
+                    mask[perturb_covar_to_cells[i]] = True
+                    mask &= ~control_mask & split_cov_mask
+                    if not np.any(mask):
                         continue
                     # map unique condition id to target id
                     perturbation_covariates_mask[mask] = tgt_counter  # type: ignore[index]
