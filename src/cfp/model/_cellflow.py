@@ -253,6 +253,8 @@ class CellFlow:
         flow: dict[Literal["constant_noise", "bridge"], float] | None = None,
         match_fn: Callable[[ArrayLike, ArrayLike], ArrayLike] = match_linear,
         optimizer: optax.GradientTransformation = optax.adam(1e-4),
+        cfg_p_resample: float = 0.0,
+        cfg_ode_weight: float = 0.0,
         layer_norm_before_concatenation: bool = False,
         linear_projection_before_concatenation: bool = False,
         genot_source_layers: Layers_t | None = None,
@@ -361,6 +363,11 @@ class CellFlow:
             :func:`cfp.utils.match_linear`.
         optimizer
             Optimizer used for training.
+        cfg_p_resample
+            Probability of the null condition for classifier free guidance.
+        cfg_ode_weight
+            Weighting factor of the null condition for classifier free guidance.
+            0 corresponds to no classifier-free guidance, the larger 0, the more guidance.
         layer_norm_before_concatenation
             If :obj:`True`, applies layer normalization before concatenating
             the embedded time, embedded data, and condition embeddings.
@@ -465,6 +472,8 @@ class CellFlow:
                 match_fn=match_fn,
                 flow=flow,
                 optimizer=optimizer,
+                cfg_p_resample=cfg_p_resample,
+                cfg_ode_weight=cfg_ode_weight,
                 conditions=self.train_data.condition_data,
                 rng=jax.random.PRNGKey(seed),
                 **solver_kwargs,
