@@ -9,6 +9,7 @@ User API
     model
     solvers
     networks
+    datasets
     utils
     training
     plotting
