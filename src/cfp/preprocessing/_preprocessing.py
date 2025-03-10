@@ -4,9 +4,9 @@ from typing import Any, Literal
 import anndata as ad
 import numpy as np
 import sklearn.preprocessing as preprocessing
-from cfp._types import ArrayLike
 
 from cfp._logging import logger
+from cfp._types import ArrayLike
 from cfp.data._utils import _to_list
 
 __all__ = ["encode_onehot", "annotate_compounds", "get_molecular_fingerprints"]
@@ -30,7 +30,7 @@ def annotate_compounds(
     query_id_type
         Type of the compound identifiers. Either ``'name'`` or ``'cid'``.
     obs_key_prefixes
-        Prefix for the keys in :attr:`~anndata.AnnData.obs` to store the annotations. If :obj:`None`, 
+        Prefix for the keys in :attr:`~anndata.AnnData.obs` to store the annotations. If :obj:`None`,
         uses ``compound_keys`` as prefixes.
     copy
         Return a copy of ``adata`` instead of updating it in place.

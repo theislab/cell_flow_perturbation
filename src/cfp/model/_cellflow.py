@@ -16,8 +16,8 @@ from ott.neural.methods.flows import dynamics
 
 from cfp import _constants
 from cfp._logging import logger
-from cfp._types import Layers_separate_input_t, Layers_t, ArrayLike
-from cfp.data._data import ConditionData, ValidationData, TrainingData
+from cfp._types import ArrayLike, Layers_separate_input_t, Layers_t
+from cfp.data._data import ConditionData, TrainingData, ValidationData
 from cfp.data._dataloader import PredictionSampler, TrainSampler, ValidationSampler
 from cfp.data._datamanager import DataManager
 from cfp.model._utils import _write_predictions
@@ -131,9 +131,9 @@ class CellFlow:
             :attr:`~anndata.AnnData.obs` as columns ``drug_1`` and ``drug_2`` with three different
             drugs ``DrugA``, ``DrugB``, and ``DrugC``, and ``dose_1`` and ``dose_2`` for their
             dosages, respectively. We store the embeddings of the drugs in
-            :attr:`~anndata.AnnData.uns` under the key ``drug_embeddings``, while the dosage 
-            columns are numeric. Moreover, we have a covariate ``cell_type`` with values 
-            ``cell_typeA`` and ``cell_typeB``, with embeddings stored in 
+            :attr:`~anndata.AnnData.uns` under the key ``drug_embeddings``, while the dosage
+            columns are numeric. Moreover, we have a covariate ``cell_type`` with values
+            ``cell_typeA`` and ``cell_typeB``, with embeddings stored in
             :attr:`~anndata.AnnData.uns` under the key ``cell_type_embeddings``. Note that we then
             also have to set ``'split_covariates'`` as we assume we have an unperturbed population
             for each cell type.
@@ -567,7 +567,7 @@ class CellFlow:
         covariate_data
             Covariate data defining the condition to predict. This :class:`~pandas.DataFrame`
             should have the same columns as :attr:`~anndata.AnnData.obs` of
-            :attr:`cfp.model.CellFlow.adata`, and as registered in 
+            :attr:`cfp.model.CellFlow.adata`, and as registered in
             :attr:`cfp.model.CellFlow.data_manager`.
         sample_rep
             Key in :attr:`~anndata.AnnData.obsm` where the sample representation is stored or
@@ -837,7 +837,6 @@ class CellFlow:
                 f"Expected `data` to be an instance of `TrainingData`, found `{type(data)}`."
             )
         self._train_data = data
-
 
     @velocity_field.setter
     def velocity_field(self, vf: ConditionalVelocityField) -> None:

@@ -66,8 +66,8 @@ class CFJaxSCVI(JaxSCVI):
         Parameters
         ----------
         adata
-            :class:`~anndata.AnnData` object with equivalent structure to initial 
-            :class:`~anndata.AnnData` object. If `:obj:`None`, defaults to the 
+            :class:`~anndata.AnnData` object with equivalent structure to initial
+            :class:`~anndata.AnnData` object. If `:obj:`None`, defaults to the
             :class:`~anndata.AnnData` object used to initialize the model.
         indices
             Indices of cells in adata to use. If :obj:`None`, all cells are used.
@@ -76,7 +76,7 @@ class CFJaxSCVI(JaxSCVI):
         n_samples
             Number of samples to use for computing the latent representation.
         batch_size
-            Minibatch size for data loading into model. Defaults to 
+            Minibatch size for data loading into model. Defaults to
             :attr:`scvi.settings.ScviConfig.batch_size`.
 
         Returns

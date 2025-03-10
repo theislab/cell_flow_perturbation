@@ -2,6 +2,7 @@ import anndata as ad
 import numpy as np
 import scanpy as sc
 from scipy.sparse import csr_matrix
+
 from cfp._types import ArrayLike
 
 __all__ = ["centered_pca", "reconstruct_pca", "project_pca"]
@@ -38,7 +39,7 @@ def centered_pca(
 
     Returns
     -------
-        If ``copy`` is :obj:`True`, returns a new :class:`~anndata.AnnData` object with the PCA 
+        If ``copy`` is :obj:`True`, returns a new :class:`~anndata.AnnData` object with the PCA
         results stored in :attr:`~anndata.AnnData.obsm`. Otherwise, updates ``adata`` in place.
 
         Sets the following fields:
@@ -111,7 +112,7 @@ def reconstruct_pca(
     query_adata
         An :class:`~anndata.AnnData` object with the query data.
     use_rep : str
-        Representation to use for PCA. If ``'X'``, uses :attr:`~anndata.AnnData.X`. Otherwise, uses 
+        Representation to use for PCA. If ``'X'``, uses :attr:`~anndata.AnnData.X`. Otherwise, uses
         ``adata.obsm[use_rep]``.
     ref_adata
         An :class:`~anndata.AnnData` object with the reference data containing

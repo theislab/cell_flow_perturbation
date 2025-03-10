@@ -6,8 +6,8 @@ import anndata as ad
 import jax.tree as jt
 import jax.tree_util as jtu
 import numpy as np
-from cfp._types import ArrayLike
 
+from cfp._types import ArrayLike
 from cfp.metrics._metrics import compute_e_distance, compute_r_squared, compute_scalar_mmd, compute_sinkhorn_div
 
 __all__ = [
@@ -225,7 +225,7 @@ class PCADecodedMetrics(Metrics):
         An :class:`~anndata.AnnData` object with the reference data containing
         ``adata.varm["X_mean"]`` and ``adata.varm["PCs"]``.
     metrics
-        List of metrics to compute. Supported metrics are ``"r_squared"``, ``"mmd"``, 
+        List of metrics to compute. Supported metrics are ``"r_squared"``, ``"mmd"``,
         ``"sinkhorn_div"``, and ``"e_distance"``.
     metric_aggregations
         List of aggregation functions to use for each metric. Supported aggregations are ``"mean"``
@@ -430,8 +430,8 @@ class CallbackRunner:
     Parameters
     ----------
     callbacks
-        List of callbacks to run. Callbacks should be of type 
-        :class:`~cfp.training.ComputationCallback` or 
+        List of callbacks to run. Callbacks should be of type
+        :class:`~cfp.training.ComputationCallback` or
         :class:`~cfp.training.LoggingCallback`
 
     Returns
