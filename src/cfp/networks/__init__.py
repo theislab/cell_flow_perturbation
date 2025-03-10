@@ -3,8 +3,8 @@ from cfp.networks._set_encoders import (
                                         MLPBlock,
                                         SeedAttentionPooling,
                                         SelfAttention,
-                                        TokenAttentionPooling,
                                         SelfAttentionBlock,
+                                        TokenAttentionPooling,
 )
 from cfp.networks._velocity_field import ConditionalVelocityField
 

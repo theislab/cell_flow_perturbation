@@ -4,10 +4,10 @@ import anndata as ad
 import jax
 import numpy as np
 import pandas as pd
-from cfp._types import ArrayLike
 from scipy import sparse
 
 from cfp._logging import logger
+from cfp._types import ArrayLike
 
 __all__ = ["compute_wknn", "transfer_labels"]
 
@@ -65,7 +65,7 @@ def compute_wknn(
     Returns
     -------
         If ``copy`` is :obj:`True`, returns a new :class:`~anndata.AnnData` object with the
-        weighted k-nearest neighbors stored in :attr:`~anndata.AnnData.uns`. Otherwise, updates 
+        weighted k-nearest neighbors stored in :attr:`~anndata.AnnData.uns`. Otherwise, updates
         ``adata`` in place.
 
         Sets the following fields:
@@ -111,7 +111,7 @@ def transfer_labels(
     label_key : str
         Key in :attr:`~anndata.AnnData.obs` of ``ref_adata`` containing the labels
     wknn_key : str
-        Key in :attr:`~anndata.AnnData.uns` of ``ref_adata`` containing the weighted k-nearest 
+        Key in :attr:`~anndata.AnnData.uns` of ``ref_adata`` containing the weighted k-nearest
         neighbors graph
     copy : bool
         Return a copy of ``query_adata`` instead of updating it in place
@@ -119,7 +119,7 @@ def transfer_labels(
     Returns
     -------
         If ``copy`` is :obj:`True`, returns a new :class:`~anndata.AnnData` object with the
-        transferred labels stored in :attr:`~anndata.AnnData.obs`. Otherwise, updates ``adata`` in 
+        transferred labels stored in :attr:`~anndata.AnnData.obs`. Otherwise, updates ``adata`` in
         place.
 
         Sets the following fields:

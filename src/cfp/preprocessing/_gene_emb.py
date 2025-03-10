@@ -228,7 +228,9 @@ def get_model_and_tokenizer(
     model_name: str, use_cuda: bool, cache_dir: None | str
 ) -> tuple[EsmModel, AutoTokenizer]:
     model_path = os.path.join("facebook", model_name)
-    model = EsmModel.from_pretrained(model_path, cache_dir=cache_dir, add_pooling_layer=False)
+    model = EsmModel.from_pretrained(
+        model_path, cache_dir=cache_dir, add_pooling_layer=False
+    )
     model.eval()
     tokenizer = AutoTokenizer.from_pretrained(model_path, cache_dir=cache_dir)
     if use_cuda:

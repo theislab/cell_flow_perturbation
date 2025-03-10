@@ -227,7 +227,7 @@ class DataManager:
             is stored or ``'X'`` to use :attr:`~anndata.AnnData.X`.
         covariate_data
             A :class:`~pandas.DataFrame` with columns defining the covariates as
-            in :meth:`cfp.model.CellFlow.prepare_data` and stored in 
+            in :meth:`cfp.model.CellFlow.prepare_data` and stored in
             :attr:`cfp.model.CellFlow.data_manager`.
         rep_dict
             Dictionary with representations of the covariates.
@@ -799,10 +799,26 @@ class DataManager:
                 col_is_cat.append(False)
                 continue
             if adata.obs[covariate].isin(["True", "False", True, False]).all():
-                adata.obs[covariate] = adata.obs[covariate].astype(int)
+                if not isinstance(adata.obs[covariate].dtype, pd.CategoricalDtype):
+                    logger.warning(
+                        (
+                            f"Converting boolean covariate '{covariate}' to categorical, which requires "
+                            f"instantiation of the `adata` object and thus leads to higher memory requirements. "
+                            f"Consider changing '{covariate}' to to categorical before calling this function.",
+                        )
+                    )
+                    adata.obs[covariate] = adata.obs[covariate].astype(int)
                 col_is_cat.append(False)
                 continue
             try:
+                if not isinstance(adata.obs[covariate].dtype, pd.CategoricalDtype):
+                    logger.warning(
+                        (
+                            f"Converting boolean covariate '{covariate}' to categorical, which requires "
+                            f"instantiation of the `adata` object and thus leads to higher memory requirements. "
+                            f"Consider changing '{covariate}' to to categorical before calling this function.",
+                        )
+                    )
                 adata.obs[covariate] = adata.obs[covariate].astype("category")
                 col_is_cat.append(True)
             except ValueError as e:

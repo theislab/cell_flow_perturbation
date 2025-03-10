@@ -405,7 +405,7 @@ class ConditionEncoder(BaseModule):
     pooling
         Pooling method, should be one of:
 
-        - ``'mean'``: Aggregates combinations of covariates by the mean of their learned 
+        - ``'mean'``: Aggregates combinations of covariates by the mean of their learned
           embeddings.
         - ``'attention_token'``: Aggregates combinations of covariates by an attention mechanism
           with a token.
