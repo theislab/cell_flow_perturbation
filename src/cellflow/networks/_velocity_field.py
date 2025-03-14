@@ -145,6 +145,7 @@ class ConditionalVelocityField(nn.Module):
 
     def __call__(
         self,
+        rng: jnp.ndarray,
         t: jnp.ndarray,
         x: jnp.ndarray,
         cond: dict[str, jnp.ndarray],
@@ -154,6 +155,8 @@ class ConditionalVelocityField(nn.Module):
 
         Parameters
         ----------
+            rng
+                Random number generator.
             t
                 Time of shape ``[batch, 1]``.
             x
@@ -170,9 +173,14 @@ class ConditionalVelocityField(nn.Module):
         """
         squeeze = x.ndim == 1
         if self.encode_conditions:
-            cond = self.condition_encoder(cond, training=train)
+            cond_mean, cond_logvar = self.condition_encoder(cond, training=train)
         else:
-            cond = jnp.concatenate(list(cond.values()), axis=-1)
+            cond_mean = jnp.concatenate(list(cond.values()), axis=-1)
+            cond_logvar = jnp.zeros_like(cond)
+        if self.condition_encoder.mode == "deterministic":
+            cond = cond_mean
+        else:
+            cond = cond_mean + jax.random.normal(rng, cond_mean.shape) * jnp.exp(0.5 * cond_logvar)
         t = time_encoder.cyclical_time_encoder(t, n_freqs=self.time_freqs)
         t = self.time_encoder(t, training=train)
         x = self.x_encoder(x, training=train)
@@ -187,7 +195,7 @@ class ConditionalVelocityField(nn.Module):
 
         concatenated = jnp.concatenate((t, x, cond), axis=-1)
         out = self.decoder(concatenated, training=train)
-        return self.output_layer(out)
+        return self.output_layer(out), cond_mean, cond_logvar
 
     def get_condition_embedding(self, condition: dict[str, jnp.ndarray]) -> jnp.ndarray:
         """Get the embedding of the condition.

@@ -50,6 +50,8 @@ class OTFlowMatching:
     ):
         self._is_trained: bool = False
         self.vf = vf
+        self.condition_encoder_mode = self.vf.condition_encoder.mode
+        self.condition_encoder_regularization = self.vf.condition_encoder.regularization
         self.flow = flow
         self.time_sampler = time_sampler
         self.match_fn = jax.jit(match_fn)
@@ -76,7 +78,7 @@ class OTFlowMatching:
             ) -> jnp.ndarray:
                 rng_flow, rng_dropout = jax.random.split(rng, 2)
                 x_t = self.flow.compute_xt(rng_flow, t, source, target)
-                v_t = vf_state.apply_fn(
+                v_t, mean_cond, logvar_cond = vf_state.apply_fn(
                     {"params": params},
                     t,
                     x_t,
@@ -84,8 +86,13 @@ class OTFlowMatching:
                     rngs={"dropout": rng_dropout},
                 )
                 u_t = self.flow.compute_ut(t, x_t, source, target)
-
-                return jnp.mean((v_t - u_t) ** 2)
+                flow_matching_loss = jnp.mean((v_t - u_t) ** 2)
+                condition_mean_regularization = 0.5 * jnp.mean(mean_cond**2)
+                condition_var_regularization = -0.5 * jnp.mean(logvar_cond - jnp.exp(logvar_cond))
+                encoder_loss = self.condition_encoder_regularization * (
+                    condition_mean_regularization + condition_var_regularization
+                )
+                return flow_matching_loss + encoder_loss
 
             batch_size = len(source)
             key_t, key_model = jax.random.split(rng, 2)

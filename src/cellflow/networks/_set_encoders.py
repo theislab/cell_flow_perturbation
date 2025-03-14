@@ -398,6 +398,16 @@ class ConditionEncoder(BaseModule):
     ----------
     output_dim
         Dimensionality of the output.
+    mode
+        Mode of the encoder, should be one of:
+        - ``'deterministic'``: Learns condition encoding point-wise.
+        - ``'stochastic'``: Learns a Gaussian distribution for representing conditions.
+    regularization
+        Regularization strength in the latent space:
+        - For deterministic mode, it is the strength of the L2 regularization.
+        - For stochastic mode, it is the strength of the KL divergence regularization.
+    decoder
+        Whether to use a decoder.
     pooling
         Pooling method, should be one of:
 
@@ -416,6 +426,8 @@ class ConditionEncoder(BaseModule):
         dictionary with input-specific layers.
     layers_after_pool
         Layers after pooling.
+    layers_decoder
+        Layers for the decoder. Only relevant if ``'decoder'=True``.
     output_dropout
         Dropout rate for the output layer.
     mask_value
@@ -429,11 +441,15 @@ class ConditionEncoder(BaseModule):
     """
 
     output_dim: int
+    mode: Literal["deterministic", "stochastic"] = "deterministic"
+    regularization: float = 0.0
+    decoder: bool = False
     pooling: Literal["mean", "attention_token", "attention_seed"] = "attention_token"
     pooling_kwargs: dict[str, Any] = dc_field(default_factory=lambda: {})
     covariates_not_pooled: Sequence[str] = dc_field(default_factory=list)
     layers_before_pool: Layers_t | Layers_separate_input_t = dc_field(default_factory=lambda: [])
     layers_after_pool: Layers_t = dc_field(default_factory=lambda: [])
+    layers_decoder: Layers_t = dc_field(default_factory=lambda: [])
     output_dropout: float = 0.0
     mask_value: float = 0.0
     genot_source_layers: Layers_t | None = None
@@ -468,7 +484,10 @@ class ConditionEncoder(BaseModule):
             self.pool_module = SeedAttentionPooling(**self.pooling_kwargs)
 
         # modules after pooling
-        self.after_pool_modules = self._get_layers(self.layers_after_pool, self.output_dim, self.output_dropout)
+        self.after_pool_modules_mean = self._get_layers(self.layers_after_pool, self.output_dim, self.output_dropout)
+
+        if self.mode == "stochastic":
+            self.after_pool_modules_var = self._get_layers(self.layers_after_pool, self.output_dim, self.output_dropout)
 
         # separate input layers for GENOT
         if self.genot_source_dim:
@@ -481,6 +500,7 @@ class ConditionEncoder(BaseModule):
     def __call__(
         self,
         conditions: dict[str, jnp.ndarray],
+        rng: jax.Array,
         training: bool = True,
         return_conditions_only=False,
     ) -> jnp.ndarray:
@@ -491,6 +511,8 @@ class ConditionEncoder(BaseModule):
         ----------
         conditions : dict[str, jnp.ndarray]
             Dictionary of batch of conditions of shape ``(batch_size, set_size, condition_dim)``.
+        rng:
+            Random number generator.
         training : bool
             Whether the model is in training mode.
         return_conditions_only : bool
@@ -570,10 +592,15 @@ class ConditionEncoder(BaseModule):
             conditions = jnp.concatenate([conditions, conditions_not_pooled], axis=-1)
 
         # apply modules after pooling
-        conditions = self._apply_modules(self.after_pool_modules, conditions, None, training)
+        conditions = self._apply_modules(self.after_pool_modules_mean, conditions, None, training)
+
+        if self.mode == "stochastic":
+            conditions_logvar = self._apply_modules(self.after_pool_modules_var, conditions, None, training)
+        else:
+            conditions_logvar = jnp.zeros_like(conditions)
 
         if return_conditions_only or self.genot_source_dim == 0:
-            return conditions
+            return conditions, conditions_logvar
 
         # GENOT: apply cell data modules
         genot_cell_data = self._apply_modules(self.genot_source_modules, genot_cell_data, None, training)
@@ -589,7 +616,7 @@ class ConditionEncoder(BaseModule):
             )
         )
 
-        return conditions
+        return conditions, conditions_logvar  # TODO: adapt GENOT to stochastic encoder
 
     def _get_layers(
         self,
