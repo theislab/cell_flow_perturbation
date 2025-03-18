@@ -1,5 +1,5 @@
-Model
-~~~~~
+Datasets
+~~~~~~~~
 .. module:: cellflow.datasets
 .. currentmodule:: cellflow
 .. autosummary::
