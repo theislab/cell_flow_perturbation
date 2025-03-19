@@ -33,7 +33,7 @@ def compute_sinkhorn_div(x: ArrayLike, y: ArrayLike, epsilon: float = 1e-2) -> f
             cost_fn=costs.SqEuclidean(),
             epsilon=epsilon,
             scale_cost=1.0,
-        ).divergence
+        )[0]
     )
 
 
