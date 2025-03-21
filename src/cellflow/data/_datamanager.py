@@ -532,7 +532,6 @@ class DataManager:
                 control_mask=jnp.ones((adata.n_obs,)),
                 src_counter=src_counter,
             )
-
             if (split_covariates_mask == split_covariates_mask_previous).all():
                 raise ValueError(f"No cells found in `adata` for split covariates {split_combination}.")
             src_counter += 1

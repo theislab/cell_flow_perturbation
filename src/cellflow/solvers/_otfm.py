@@ -9,6 +9,7 @@ from flax.training import train_state
 from ott.neural.methods.flows import dynamics
 from ott.solvers import utils as solver_utils
 
+from cellflow import utils
 from cellflow._types import ArrayLike
 from cellflow.networks._velocity_field import ConditionalVelocityField
 
@@ -50,6 +51,8 @@ class OTFlowMatching:
     ):
         self._is_trained: bool = False
         self.vf = vf
+        self.condition_encoder_mode = self.vf.condition_mode
+        self.condition_encoder_regularization = self.vf.regularization
         self.flow = flow
         self.time_sampler = time_sampler
         self.match_fn = jax.jit(match_fn)
@@ -62,6 +65,7 @@ class OTFlowMatching:
         def vf_step_fn(
             rng: jax.Array,
             vf_state: train_state.TrainState,
+            time: jnp.ndarray,
             source: jnp.ndarray,
             target: jnp.ndarray,
             conditions: dict[str, jnp.ndarray] | None,
@@ -74,24 +78,26 @@ class OTFlowMatching:
                 conditions: dict[str, jnp.ndarray] | None,
                 rng: jax.Array,
             ) -> jnp.ndarray:
-                rng_flow, rng_dropout = jax.random.split(rng, 2)
+                rng_flow, rng_encoder, rng_dropout = jax.random.split(rng, 3)
                 x_t = self.flow.compute_xt(rng_flow, t, source, target)
-                v_t = vf_state.apply_fn(
+                v_t, mean_cond, logvar_cond = vf_state.apply_fn(
                     {"params": params},
                     t,
                     x_t,
                     conditions,
-                    rngs={"dropout": rng_dropout},
+                    rngs={"dropout": rng_dropout, "condition_encoder": rng_encoder},
                 )
                 u_t = self.flow.compute_ut(t, x_t, source, target)
+                flow_matching_loss = jnp.mean((v_t - u_t) ** 2)
+                condition_mean_regularization = 0.5 * jnp.mean(mean_cond**2)
+                condition_var_regularization = -0.5 * jnp.mean(1 + logvar_cond - jnp.exp(logvar_cond))
+                encoder_loss = self.condition_encoder_regularization * (
+                    condition_mean_regularization + condition_var_regularization
+                )
+                return flow_matching_loss + encoder_loss
 
-                return jnp.mean((v_t - u_t) ** 2)
-
-            batch_size = len(source)
-            key_t, key_model = jax.random.split(rng, 2)
-            t = self.time_sampler(key_t, batch_size)
             grad_fn = jax.value_and_grad(loss_fn)
-            loss, grads = grad_fn(vf_state.params, t, source, target, conditions, key_model)
+            loss, grads = grad_fn(vf_state.params, time, source, target, conditions, rng)
             return vf_state.apply_gradients(grads=grads), loss
 
         return vf_step_fn
@@ -117,7 +123,10 @@ class OTFlowMatching:
         """
         src, tgt = batch["src_cell_data"], batch["tgt_cell_data"]
         condition = batch.get("condition")
-        rng_resample, rng_step_fn = jax.random.split(rng, 2)
+        rng_resample, rng_time, rng_step_fn = jax.random.split(rng, 3)
+        n = src.shape[0]
+        time = self.time_sampler(rng_time, n)
+
         if self.match_fn is not None:
             tmat = self.match_fn(src, tgt)
             src_ixs, tgt_ixs = solver_utils.sample_joint(rng_resample, tmat)
@@ -126,71 +135,88 @@ class OTFlowMatching:
         self.vf_state, loss = self.vf_step_fn(
             rng_step_fn,
             self.vf_state,
+            time,
             src,
             tgt,
             condition,
         )
         return loss
 
-    def get_condition_embedding(self, condition: dict[str, ArrayLike]) -> ArrayLike:
+    def get_condition_embedding(self, condition: dict[str, ArrayLike], return_as_numpy=True) -> ArrayLike:
         """Get learnt embeddings of the conditions.
 
         Parameters
         ----------
         condition
             Conditions to encode
+        return_as_numpy
+            Whether to return the embeddings as numpy arrays.
 
         Returns
         -------
-        Encoded conditions.
+        Mean and log-variance of encoded conditions.
         """
-        cond_embed = self.vf.apply(
+        cond_mean, cond_logvar = self.vf.apply(
             {"params": self.vf_state.params},
             condition,
             method="get_condition_embedding",
         )
-        return np.asarray(cond_embed)
+        if return_as_numpy:
+            return np.asarray(cond_mean), np.asarray(cond_logvar)
+        return cond_mean, cond_logvar
 
-    def predict(self, x: ArrayLike, condition: dict[str, ArrayLike], **kwargs: Any) -> ArrayLike:
-        """Predict the translated source ``'x'`` under condition ``'condition'``.
-
-        This function solves the ODE learnt with
-        the :class:`~cellflow.networks.ConditionalVelocityField`.
-
-        Parameters
-        ----------
-        x
-            Input data of shape [batch_size, ...].
-        condition
-            Condition of the input data of shape [batch_size, ...].
-        kwargs
-            Keyword arguments for :func:`diffrax.diffeqsolve`.
-
-        Returns
-        -------
-        The push-forward distribution of ``'x'`` under condition ``'condition'``.
-        """
+    def predict(
+        self,
+        x: ArrayLike,
+        condition: dict[str, ArrayLike],
+        rng: ArrayLike | None = None,
+        **kwargs: Any,
+    ) -> ArrayLike:
+        rng = rng if rng is not None else jax.random.PRNGKey(0)
         kwargs.setdefault("dt0", None)
         kwargs.setdefault("solver", diffrax.Tsit5())
         kwargs.setdefault("stepsize_controller", diffrax.PIDController(rtol=1e-5, atol=1e-5))
+        kwargs.setdefault("max_steps", 100000)
 
-        def vf(t: jnp.ndarray, x: jnp.ndarray, cond: dict[str, jnp.ndarray] | None) -> jnp.ndarray:
+        use_mean = True if rng is None else False
+        rng = utils.default_prng_key(rng) if rng is None else rng
+        condition_mean, condition_logvar = self.get_condition_embedding(condition, return_as_numpy=False)
+
+        if self.condition_encoder_mode == "deterministic" or use_mean:
+            cond_embedding = condition_mean
+        else:
+            rng, rng_embed = jax.random.split(rng)
+            cond_embedding = condition_mean + jax.random.normal(rng_embed, condition_mean.shape) * jnp.exp(
+                0.5 * condition_logvar
+            )
+
+        def vf(t: float, y: jnp.ndarray, args: tuple) -> jnp.ndarray:
+            cond_embedding = args[0]
             params = self.vf_state.params
-            return self.vf_state.apply_fn({"params": params}, t, x, cond, train=False)
+            t_array = jnp.array([[t]])
+            y_array = y[None, :]
+            preds, _, _ = self.vf.apply(
+                {"params": params},
+                t=t_array,
+                x_t=y_array,
+                cond_embedding=cond_embedding,
+                train=False,
+            )
+            return preds[0]
 
-        def solve_ode(x: jnp.ndarray, condition: jnp.ndarray | None) -> jnp.ndarray:
-            ode_term = diffrax.ODETerm(vf)
-            result = diffrax.diffeqsolve(
-                ode_term,
+        def solve_ode(x_0: jnp.ndarray, args: tuple) -> jnp.ndarray:
+            term = diffrax.ODETerm(vf)
+            sol = diffrax.diffeqsolve(
+                term,
                 t0=0.0,
                 t1=1.0,
-                y0=x,
-                args=condition,
+                y0=x_0,
+                args=args,
                 **kwargs,
             )
-            return result.ys[0]
+            return sol.ys[0]
 
-        x_pred = jax.jit(jax.vmap(solve_ode, in_axes=[0, None]))(x, condition)
+        x_pred = jax.jit(jax.vmap(solve_ode, in_axes=(0, None)))(x, (cond_embedding,))
         return np.array(x_pred)
 
     @property

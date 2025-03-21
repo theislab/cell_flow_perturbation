@@ -7,12 +7,11 @@ import jax
 import jax.numpy as jnp
 import numpy as np
 from flax.training import train_state
-from ott import utils
 from ott.neural.methods.flows import dynamics
 from ott.neural.networks import velocity_field
 from ott.solvers import utils as solver_utils
 
-from cellflow._constants import GENOT_CELL_KEY
+from cellflow import utils
 from cellflow._types import ArrayLike
 from cellflow.model._utils import _multivariate_normal
 
@@ -53,7 +52,7 @@ class GENOT:
         target space with a ``(rng, shape) -> noise`` signature.
         If :obj:`None`, multivariate normal distribution is used.
     kwargs
-        Keyword arguments for TODO
+        Keyword arguments.
     """
 
     def __init__(
@@ -70,6 +69,8 @@ class GENOT:
     ):
         self._is_trained: bool = False
         self.vf = vf
+        self.condition_encoder_mode = self.vf.condition_mode
+        self.condition_encoder_regularization = self.vf.regularization
         self.flow = flow
         self.data_match_fn = jax.jit(data_match_fn)
         self.time_sampler = time_sampler
@@ -80,7 +81,6 @@ class GENOT:
 
         self.vf_state = self.vf.create_train_state(
             input_dim=target_dim,
-            additional_cond_dim=source_dim,
             **kwargs,
         )
         self.vf_step_fn = self._get_vf_step_fn()
@@ -98,30 +98,33 @@ class GENOT:
         ):
             def loss_fn(
                 params: jnp.ndarray,
-                time: jnp.ndarray,
+                t: jnp.ndarray,
                 source: jnp.ndarray,
                 target: jnp.ndarray,
                 latent: jnp.ndarray,
                 condition: dict[str, jnp.ndarray] | None,
                 rng: jax.Array,
             ) -> jnp.ndarray:
-                rng_flow, rng_dropout = jax.random.split(rng, 2)
-                x_t = self.flow.compute_xt(rng_flow, time, latent, target)
-                if condition is not None:
-                    condition[GENOT_CELL_KEY] = source
-                else:
-                    condition = {GENOT_CELL_KEY: source}
-
-                v_t = vf_state.apply_fn(
+                rng_flow, rng_encoder, rng_dropout = jax.random.split(rng, 3)
+                x_t = self.flow.compute_xt(rng_flow, t, latent, target)
+                v_t, mean_cond, logvar_cond = vf_state.apply_fn(
                     {"params": params},
-                    time,
+                    t,
                     x_t,
+                    source,
                     condition,
-                    rngs={"dropout": rng_dropout},
+                    rngs={"dropout": rng_dropout, "condition_encoder": rng_encoder},
                 )
-                u_t = self.flow.compute_ut(time, x_t, latent, target)
+                u_t = self.flow.compute_ut(t, x_t, latent, target)
 
-                return jnp.mean((v_t - u_t) ** 2)
+                flow_matching_loss = jnp.mean((v_t - u_t) ** 2)
+                condition_mean_regularization = 0.5 * jnp.mean(mean_cond**2)
+                condition_var_regularization = -0.5 * jnp.mean(1 + logvar_cond - jnp.exp(logvar_cond))
+                encoder_loss = self.condition_encoder_regularization * (
+                    condition_mean_regularization + condition_var_regularization
+                )
+
+                return flow_matching_loss + encoder_loss
 
             grad_fn = jax.value_and_grad(loss_fn)
             loss, grads = grad_fn(vf_state.params, time, source, target, latent, conditions, rng)
@@ -193,32 +196,34 @@ class GENOT:
         loss, self.vf_state = self.vf_step_fn(rng_step_fn, self.vf_state, time, src, tgt, latent, condition)
         return loss
 
-    def get_condition_embedding(self, condition: dict[str, ArrayLike]) -> ArrayLike:
+    def get_condition_embedding(self, condition: dict[str, ArrayLike], return_as_numpy=True) -> ArrayLike:
         """Get learnt embeddings of the conditions.
 
         Parameters
         ----------
         condition
             Conditions to encode
+        return_as_numpy
+            Whether to return the embeddings as numpy arrays.
+
 
         Returns
         -------
-        Encoded conditions.
+        Mean and log-variance of encoded conditions.
         """
-        dummy_source = jnp.zeros((1, self.source_dim))
-        condition.update({GENOT_CELL_KEY: dummy_source})
-        cond_embed = self.vf.apply(
+        cond_mean, cond_logvar = self.vf.apply(
             {"params": self.vf_state.params},
             condition,
             method="get_condition_embedding",
         )
-        return np.asarray(cond_embed)
+        if return_as_numpy:
+            return np.asarray(cond_mean), np.asarray(cond_logvar)
+        return cond_mean, cond_logvar
 
     def predict(
         self,
-        source: ArrayLike,
+        x: ArrayLike,
         condition: dict[str, ArrayLike] | None = None,
-        n_samples: int = 1,
         rng: ArrayLike | None = None,
         **kwargs: Any,
     ) -> ArrayLike | tuple[ArrayLike, diffrax.Solution]:
@@ -233,8 +238,6 @@ class GENOT:
             Input data of shape [batch_size, ...].
         condition
             Condition of the input data of shape [batch_size, ...].
-        n_samples
-            Number of conditional samples to generate.
         rng
             Random generate used to sample from the latent distribution.
         kwargs
@@ -247,31 +250,51 @@ class GENOT:
         kwargs.setdefault("dt0", None)
         kwargs.setdefault("solver", diffrax.Tsit5())
         kwargs.setdefault("stepsize_controller", diffrax.PIDController(rtol=1e-5, atol=1e-5))
+        kwargs.setdefault("max_steps", 100000)
 
-        def vf(t: jnp.ndarray, x: jnp.ndarray, cond: dict[str, jnp.ndarray] | None) -> jnp.ndarray:
+        use_mean = True if rng is None else False
+        rng = utils.default_prng_key(rng) if rng is None else rng
+        condition_mean, condition_logvar = self.get_condition_embedding(condition, return_as_numpy=False)
+
+        if self.condition_encoder_mode == "deterministic" or use_mean:
+            cond_embedding = condition_mean
+        else:
+            rng, rng_embed = jax.random.split(rng)
+            cond_embedding = condition_mean + jax.random.normal(rng_embed, condition_mean.shape) * jnp.exp(
+                0.5 * condition_logvar
+            )
+
+        def vf(t: float, y: jnp.ndarray, args: tuple) -> jnp.ndarray:
+            x_0, cond_embedding = args
             params = self.vf_state.params
-            return self.vf_state.apply_fn({"params": params}, t, x, cond, train=False)
+            t_array = jnp.array([[t]])
+            y_array = y[None, :]
+            preds, _, _ = self.vf.apply(
+                {"params": params},
+                t=t_array,
+                x_t=y_array,
+                x_0=x_0,
+                cond_embedding=cond_embedding,
+                train=False,
+            )
+            return preds[0]
 
-        def solve_ode(x: jnp.ndarray, condition: dict[str, jnp.ndarray], cell_data: jnp.ndarray) -> jnp.ndarray:
-            ode_term = diffrax.ODETerm(vf)
-            condition[GENOT_CELL_KEY] = cell_data
-            result = diffrax.diffeqsolve(
-                ode_term,
+        def solve_ode(latent: jnp.ndarray, args: tuple) -> jnp.ndarray:
+            term = diffrax.ODETerm(vf)
+            sol = diffrax.diffeqsolve(
+                term,
                 t0=0.0,
                 t1=1.0,
-                y0=x,
-                args=condition,
+                y0=latent,
+                args=args,
                 **kwargs,
             )
-            return result.ys[0]
+            return sol.ys[0]
 
-        rng = utils.default_prng_key(rng)
-        latent = self.latent_noise_fn(rng, (len(source), n_samples))
+        latent = self.latent_noise_fn(rng, (len(x),))
 
-        x_pred = jax.jit(jax.vmap(jax.vmap(solve_ode, in_axes=[0, None, 0]), in_axes=[1, None, None]))(
-            latent, condition, source
-        )
-        return np.transpose(np.array(x_pred), (1, 2, 0))
+        x_pred = jax.jit(jax.vmap(solve_ode, in_axes=(0, (0, None))))(latent, (x[:, None], cond_embedding))
+        return np.array(x_pred)
 
     @property
     def is_trained(self) -> bool:
