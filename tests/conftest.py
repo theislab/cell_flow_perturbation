@@ -219,3 +219,17 @@ def adata_with_compounds() -> ad.AnnData:
     adata.obs["compound2_smiles"] = compound_smiles[compound_idcs]
 
     return adata
+
+
+@pytest.fixture
+def metrics_data():
+    data = {}
+    data["x_test"] = {
+        "Alvespimycin+Pirarubicin": np.random.rand(50, 10),
+        "Dacinostat+Danusertib": np.random.rand(50, 10),
+    }
+    data["y_test"] = {
+        "Alvespimycin+Pirarubicin": np.random.rand(20, 10),
+        "Dacinostat+Danusertib": np.random.rand(20, 10),
+    }
+    return data

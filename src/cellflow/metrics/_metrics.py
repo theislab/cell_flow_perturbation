@@ -15,6 +15,8 @@ __all__ = [
     "compute_r_squared",
     "compute_sinkhorn_div",
     "compute_e_distance",
+    "compute_e_distance_fast",
+    "maximum_mean_discrepancy",
 ]
 
 
