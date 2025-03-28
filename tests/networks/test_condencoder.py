@@ -49,9 +49,15 @@ class TestConditionEncoder:
     @pytest.mark.parametrize("covariates_not_pooled", [[], ["pert4_skip_pool"]])
     @pytest.mark.parametrize("layers_before_pool", layers_before_pool)
     @pytest.mark.parametrize("layers_after_pool", layers_after_pool)
-    def test_condition_encoder_init(self, pooling, covariates_not_pooled, layers_before_pool, layers_after_pool):
+    @pytest.mark.parametrize("condition_mode", ["deterministic", "stochastic"])
+    @pytest.mark.parametrize("regularization", [0.0, 0.1])
+    def test_condition_encoder_init(
+        self, pooling, covariates_not_pooled, layers_before_pool, layers_after_pool, condition_mode, regularization
+    ):
         cond_encoder = cellflow.networks.ConditionEncoder(
             output_dim=5,
+            condition_mode=condition_mode,
+            regularization=regularization,
             pooling=pooling,
             covariates_not_pooled=covariates_not_pooled,
             layers_before_pool=layers_before_pool,
@@ -69,4 +75,7 @@ class TestConditionEncoder:
             training=True,
             rngs={"dropout": dropout_rng},
         )
-        assert cond_out.shape == (1, 5)
+        assert isinstance(cond_out, tuple)
+        assert len(cond_out) == 2
+        assert cond_out[0].shape == (1, 5)
+        assert cond_out[1].shape == (1, 5)

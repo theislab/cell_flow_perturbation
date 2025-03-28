@@ -1,11 +1,14 @@
 from typing import Any, Literal
 
+import jax
 import jax.numpy as jnp
 from ott.geometry import costs, pointcloud
 from ott.problems.linear import linear_problem
 from ott.solvers.linear import sinkhorn
 
 ScaleCost_t = float | Literal["mean", "max_cost", "median"]
+
+__all__ = ["match_linear", "default_prng_key"]
 
 
 def match_linear(
@@ -61,3 +64,18 @@ def match_linear(
     solver = sinkhorn.Sinkhorn(threshold=threshold, **kwargs)
     out = solver(problem)
     return out.matrix
+
+
+def default_prng_key(rng: jax.Array | None) -> jax.Array:
+    """Get the default PRNG key.
+
+    Parameters
+    ----------
+    rng: PRNG key.
+
+    Returns
+    -------
+      If ``rng = None``, returns the default PRNG key. Otherwise, it returns
+      the unmodified ``rng`` key.
+    """
+    return jax.random.key(0) if rng is None else rng
