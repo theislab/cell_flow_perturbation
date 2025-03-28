@@ -186,15 +186,14 @@ class OTFlowMatching:
             cond_embedding = condition_mean
         else:
             rng, rng_embed = jax.random.split(rng)
-            cond_embedding = condition_mean + jax.random.normal(rng_embed, condition_mean.shape) * jnp.exp(
+            cond_embedding = condition_mean + jax.random.normal(rng_embed, (1,condition_mean.shape[1])) * jnp.exp(
                 0.5 * condition_logvar
             )
 
-        def vf(t: float, y: jnp.ndarray, args: tuple) -> jnp.ndarray:
-            cond_embedding = args[0]
+        def vf(t: float, x: jnp.ndarray, cond_embedding: jnp.ndarray) -> jnp.ndarray:
             params = self.vf_state.params
             t_array = jnp.array([[t]])
-            y_array = y[None, :]
+            y_array = x[None, :]
             preds, _, _ = self.vf.apply(
                 {"params": params},
                 t=t_array,
@@ -202,21 +201,21 @@ class OTFlowMatching:
                 cond_embedding=cond_embedding,
                 train=False,
             )
-            return preds[0]
+            return preds
 
-        def solve_ode(x_0: jnp.ndarray, args: tuple) -> jnp.ndarray:
+        def solve_ode(x_0: jnp.ndarray, cond_embedding: jnp.ndarray) -> jnp.ndarray:
             term = diffrax.ODETerm(vf)
             sol = diffrax.diffeqsolve(
                 term,
                 t0=0.0,
                 t1=1.0,
                 y0=x_0,
-                args=args,
+                args=cond_embedding,
                 **kwargs,
             )
             return sol.ys[0]
 
-        x_pred = jax.jit(jax.vmap(solve_ode, in_axes=(0, None)))(x, (cond_embedding,))
+        x_pred = jax.jit(jax.vmap(solve_ode, in_axes=[0, None]))(x, cond_embedding)
         return np.array(x_pred)
 
     @property
