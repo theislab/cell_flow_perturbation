@@ -159,16 +159,13 @@ class ConditionalVelocityField(nn.Module):
         self,
         t: jnp.ndarray,
         x_t: jnp.ndarray,
-        cond: dict[str, jnp.ndarray] | None = None,
-        cond_embedding: jnp.ndarray | None = None,
+        cond: dict[str, jnp.ndarray] | jnp.ndarray | None = None,
         train: bool = True,
     ):
         squeeze = x_t.ndim == 1
         if not self.encode_conditions:
-            cond = jnp.concatenate(list(cond.values()), axis=-1)
-        elif cond_embedding is None:
-            if cond is None:
-                raise ValueError("Either cond or cond_embedding must be provided.")
+            cond_embedding = jnp.concatenate(list(cond.values()), axis=-1)
+        elif not isinstance(cond, jnp.ndarray):
             cond_mean, cond_logvar = self.condition_encoder(cond, training=train)
             if self.condition_mode == "deterministic":
                 cond_embedding = cond_mean
@@ -177,7 +174,7 @@ class ConditionalVelocityField(nn.Module):
                     self.make_rng("condition_encoder"), cond_mean.shape
                 ) * jnp.exp(0.5 * cond_logvar)
         else:
-            cond_mean, cond_logvar = None, None
+            cond_embedding, cond_logvar = cond, None
 
         cond_embedding = self.layer_cond_output_dropout(cond_embedding, deterministic=not train)
 
