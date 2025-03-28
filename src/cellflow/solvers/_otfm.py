@@ -85,7 +85,7 @@ class OTFlowMatching:
                     x_t,
                     conditions,
                     rngs={"dropout": rng_dropout, "condition_encoder": rng_encoder},
-                )
+                )[0]
                 u_t = self.flow.compute_ut(t, x_t, source, target)
                 flow_matching_loss = jnp.mean((v_t - u_t) ** 2)
                 # condition_mean_regularization = 0.5 * jnp.mean(mean_cond**2)
@@ -189,7 +189,7 @@ class OTFlowMatching:
 
         def vf(t: jnp.ndarray, x: jnp.ndarray, cond: dict[str, jnp.ndarray] | None) -> jnp.ndarray:
             params = self.vf_state.params
-            return self.vf_state.apply_fn({"params": params}, t, x, cond, train=False)
+            return self.vf_state.apply_fn({"params": params}, t, x, cond, train=False)[0]
 
         def solve_ode(x: jnp.ndarray, condition: jnp.ndarray | None) -> jnp.ndarray:
             ode_term = diffrax.ODETerm(vf)
