@@ -194,9 +194,7 @@ class ConditionalVelocityField(nn.Module):
         elif cond_embedding.shape[0] != x_t.shape[0]:  # type: ignore[attr-defined]
             cond_embedding = jnp.tile(cond_embedding, (x_t.shape[0], 1))
 
-        concatenated = jnp.concatenate(
-            (t_encoded, x_encoded, cond_embedding), axis=-1
-        )
+        concatenated = jnp.concatenate((t_encoded, x_encoded, cond_embedding), axis=-1)
         out = self.decoder(concatenated, training=train)
         return self.output_layer(out), cond_mean, cond_logvar
 
