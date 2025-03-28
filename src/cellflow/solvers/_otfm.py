@@ -186,14 +186,15 @@ class OTFlowMatching:
             cond_embedding = condition_mean
         else:
             rng, rng_embed = jax.random.split(rng)
-            cond_embedding = condition_mean + jax.random.normal(rng_embed, (1,condition_mean.shape[1])) * jnp.exp(
+            cond_embedding = condition_mean + jax.random.normal(rng_embed, (1, condition_mean.shape[1])) * jnp.exp(
                 0.5 * condition_logvar
             )
 
-        def vf(t: float, x: jnp.ndarray, cond_embedding: jnp.ndarray) -> jnp.ndarray:
+        def vf(t: float, y: jnp.ndarray, args: tuple[jnp.ndarray]) -> jnp.ndarray:
+            (cond_embedding,) = args
             params = self.vf_state.params
             t_array = jnp.array([[t]])
-            y_array = x[None, :]
+            y_array = y[None, :]
             preds, _, _ = self.vf.apply(
                 {"params": params},
                 t=t_array,
@@ -201,7 +202,7 @@ class OTFlowMatching:
                 cond_embedding=cond_embedding,
                 train=False,
             )
-            return preds
+            return preds[0]
 
         def solve_ode(x_0: jnp.ndarray, cond_embedding: jnp.ndarray) -> jnp.ndarray:
             term = diffrax.ODETerm(vf)
@@ -210,7 +211,7 @@ class OTFlowMatching:
                 t0=0.0,
                 t1=1.0,
                 y0=x_0,
-                args=cond_embedding,
+                args=(cond_embedding,),
                 **kwargs,
             )
             return sol.ys[0]
