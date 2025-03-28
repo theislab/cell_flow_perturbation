@@ -187,23 +187,27 @@ class OTFlowMatching:
         kwargs.setdefault("solver", diffrax.Tsit5())
         kwargs.setdefault("stepsize_controller", diffrax.PIDController(rtol=1e-5, atol=1e-5))
 
-        def vf(t: jnp.ndarray, x: jnp.ndarray, cond: dict[str, jnp.ndarray] | None) -> jnp.ndarray:
-            params = self.vf_state.params
-            return self.vf_state.apply_fn({"params": params}, t, x, cond, train=False)[0]
+        condition_mean, condition_logvar = self.get_condition_embedding(condition, return_as_numpy=False)
 
-        def solve_ode(x: jnp.ndarray, condition: jnp.ndarray | None) -> jnp.ndarray:
+        cond_embedding = condition_mean
+
+        def vf(t: jnp.ndarray, x: jnp.ndarray, cond_embedding: jnp.ndarray) -> jnp.ndarray:
+            params = self.vf_state.params
+            return self.vf_state.apply_fn({"params": params}, t, x, cond_embedding=cond_embedding, train=False)[0]
+
+        def solve_ode(x: jnp.ndarray, cond_embedding: jnp.ndarray | None) -> jnp.ndarray:
             ode_term = diffrax.ODETerm(vf)
             result = diffrax.diffeqsolve(
                 ode_term,
                 t0=0.0,
                 t1=1.0,
                 y0=x,
-                args=condition,
+                args=cond_embedding,
                 **kwargs,
             )
             return result.ys[0]
 
-        x_pred = jax.jit(jax.vmap(solve_ode, in_axes=[0, None]))(x, condition)
+        x_pred = jax.jit(jax.vmap(solve_ode, in_axes=[0, None]))(x, cond_embedding)
         return np.array(x_pred)
 
     @property
