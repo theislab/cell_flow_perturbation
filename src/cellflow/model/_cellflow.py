@@ -15,13 +15,12 @@ import pandas as pd
 from ott.neural.methods.flows import dynamics
 
 from cellflow import _constants
-from cellflow._logging import logger
 from cellflow._types import ArrayLike, Layers_separate_input_t, Layers_t
 from cellflow.data._data import ConditionData, TrainingData, ValidationData
 from cellflow.data._dataloader import PredictionSampler, TrainSampler, ValidationSampler
 from cellflow.data._datamanager import DataManager
 from cellflow.model._utils import _write_predictions
-from cellflow.networks._velocity_field import ConditionalVelocityField
+from cellflow.networks import _velocity_field
 from cellflow.plotting import _utils
 from cellflow.solvers import _genot, _otfm
 from cellflow.training._callbacks import BaseCallback
@@ -49,12 +48,17 @@ class CellFlow:
     def __init__(self, adata: ad.AnnData, solver: Literal["otfm", "genot"] = "otfm"):
         self._adata = adata
         self._solver_class = _otfm.OTFlowMatching if solver == "otfm" else _genot.GENOT
+        self._vf_class = (
+            _velocity_field.ConditionalVelocityField
+            if solver == "otfm"
+            else _velocity_field.GENOTConditionalVelocityField
+        )
         self._dataloader: TrainSampler | None = None
         self._trainer: CellFlowTrainer | None = None
         self._validation_data: dict[str, ValidationData] = {}
         self._solver: _otfm.OTFlowMatching | _genot.GENOT | None = None
         self._condition_dim: int | None = None
-        self._vf: ConditionalVelocityField | None = None
+        self._vf: _velocity_field.ConditionalVelocityField | _velocity_field.GENOTConditionalVelocityField | None = None
 
     def prepare_data(
         self,
@@ -226,6 +230,8 @@ class CellFlow:
     def prepare_model(
         self,
         encode_conditions: bool = True,
+        condition_mode: Literal["deterministic", "stochastic"] = "deterministic",
+        regularization: float = 0.0,
         condition_embedding_dim: int = 32,
         pooling: Literal["mean", "attention_token", "attention_seed"] = "attention_token",
         pooling_kwargs: dict[str, Any] = types.MappingProxyType({}),
@@ -248,7 +254,7 @@ class CellFlow:
         optimizer: optax.GradientTransformation = optax.adam(1e-4),
         layer_norm_before_concatenation: bool = False,
         linear_projection_before_concatenation: bool = False,
-        genot_source_layers: Layers_t | None = None,
+        vf_kwargs: dict[str, Any] | None = None,
         seed=0,
     ) -> None:
         """Prepare the model for training.
@@ -267,6 +273,15 @@ class CellFlow:
             ``'condition_encoder_kwargs'``, ``'pooling'``, ``'pooling_kwargs'``,
             ``'layers_before_pool'``, ``'layers_after_pool'``, ``'cond_output_dropout'``
             are ignored.
+        condition_mode
+            Mode of the encoder, should be one of:
+
+            - ``'deterministic'``: Learns condition encoding point-wise.
+            - ``'stochastic'``: Learns a Gaussian distribution for representing conditions.
+        regularization
+            Regularization strength in the latent space:
+            - For deterministic mode, it is the strength of the L2 regularization.
+            - For stochastic mode, it is the strength of the VAE regularization.
         pooling
             Pooling method, should be one of:
 
@@ -360,19 +375,15 @@ class CellFlow:
         linear_projection_before_concatenation
             If :obj:`True`, applies a linear projection before concatenating
             the embedded time, embedded data.
-        genot_source_layers
-            Only relevant if ``'solver'`` is ``'genot'``, otherwise ignored.
-            Layers processing the cell data serving as an additional condition to the
-            model (see :cite:`klein:23`). Should be of the same form as ``'layers_after_pool'``,
-            i.e. a :class:`tuple` with each element a :class:`dict` with keys:
+        vf_kwargs
+            Additional keyword arguments for the solver-specific vector field.
+            For instance, when ``'solver==genot'``, the following keyword argument can be passed:
 
-                - ``'layer_type'`` of type :class:`str` indicating the type of the layer, can be
-                  ``'mlp'`` or ``'self_attention'``.
-                - Further keyword arguments for the layer type :class:`cellflow.networks.MLPBlock` or
-                  :class:`cellflow.networks.SelfAttentionBlock`.
+                - ``'genot_source_dims'`` of type :class:`tuple` with the dimensions
+                  of the :class:`cellflow.networks.MLPBlock` processing the source cell.
+                - ``'genot_source_dropout'`` of type :class:`float` indicating the dropout rate
+                  for the source cell processing.
 
-            If :obj:`None`, defaults to an :class:`cellflow.networks.MLPBlock` with 3 layers of
-            :math:`1024` hidden units and a dropout rate of :math:`0.0`.
         seed
             Random seed.
 
@@ -390,28 +401,33 @@ class CellFlow:
         if self.train_data is None:
             raise ValueError("Dataloader not initialized. Please call `prepare_data` first.")
 
+        if condition_mode == "stochastic":
+            if not encode_conditions:
+                raise ValueError("Stochastic condition embeddings require encoding conditions.")
+            if regularization == 0.0:
+                raise ValueError("Stochastic condition embeddings require `regularization`>0.")
+
         condition_encoder_kwargs = condition_encoder_kwargs or {}
-        if self._solver_class == _otfm.OTFlowMatching and genot_source_layers is not None:
-            raise ValueError("For OTFlowMatching, 'genot_source_layers' must be `None`.")
+        if self._solver_class == _otfm.OTFlowMatching and vf_kwargs is not None:
+            raise ValueError("For `solver='otfm'`, `vf_kwargs` must be `None`.")
         if self._solver_class == _genot.GENOT:
-            condition_encoder_kwargs["genot_source_dim"] = self._data_dim
-            if genot_source_layers is None:
-                condition_encoder_kwargs["genot_source_layers"] = (
-                    {
-                        "layer_type": "mlp",
-                        "dims": [1024, 1024, 1024],
-                        "dropout_rate": 0.0,
-                    },
-                )
+            if vf_kwargs is None:
+                vf_kwargs = {"genot_source_dims": [1024, 1024, 1024], "genot_source_dropout": 0.0}
             else:
-                condition_encoder_kwargs["genot_source_layers"] = genot_source_layers
+                assert isinstance(vf_kwargs, dict)
+                assert "genot_source_dims" in vf_kwargs
+                assert "genot_source_dropout" in vf_kwargs
+        else:
+            vf_kwargs = {}
         covariates_not_pooled = [] if pool_sample_covariates else self._dm.sample_covariates
         solver_kwargs = solver_kwargs or {}
         flow = flow or {"constant_noise": 0.0}
 
-        self.vf = ConditionalVelocityField(
+        self.vf = self._vf_class(
             output_dim=self._data_dim,
             max_combination_length=self.train_data.max_combination_length,
+            condition_mode=condition_mode,
+            regularization=regularization,
             encode_conditions=encode_conditions,
             condition_embedding_dim=condition_embedding_dim,
             covariates_not_pooled=covariates_not_pooled,
@@ -431,6 +447,7 @@ class CellFlow:
             decoder_dropout=decoder_dropout,
             layer_norm_before_concatenation=layer_norm_before_concatenation,
             linear_projection_before_concatenation=linear_projection_before_concatenation,
+            **vf_kwargs,
         )
 
         flow, noise = next(iter(flow.items()))
@@ -531,7 +548,7 @@ class CellFlow:
         sample_rep: str | None = None,
         condition_id_key: str | None = None,
         key_added_prefix: str | None = None,
-        n_samples: int = 1,
+        rng: ArrayLike | None = None,
         **kwargs: Any,
     ) -> dict[str, ArrayLike] | None:
         """Predict perturbation responses.
@@ -555,9 +572,10 @@ class CellFlow:
             If not :obj:`None`, prefix to store the prediction in :attr:`~anndata.AnnData.obsm`.
             If :obj:`None`, the predictions are not stored, and the predictions are returned as a
             :class:`dict`.
-        n_samples
-            Number of perturbed cells to generate for each single cell in the control population.
-            Only possible to get multiple samples if ``'solver'`` is ``'genot'``.
+        rng
+            Random number generator. If :obj:`None` and :attr:`cellflow.model.CellFlow.conditino_mode`
+            is ``'stochastic'``, the condition vector will be the mean of the learnt distributions,
+            otherwise samples from the distribution.
         kwargs
             Keyword arguments for the predict function, i.e.
             :meth:`cellflow.solvers.OTFlowMatching.predict` or :meth:`cellflow.solvers.GENOT.predict`.
@@ -574,13 +592,6 @@ class CellFlow:
         if sample_rep is None:
             sample_rep = self._dm.sample_rep
 
-        if n_samples > 1:
-            if not isinstance(self.solver, _genot.GENOT):
-                logger.warning(
-                    "Multiple samples can only be generated if the solver is `genot`, setting `n_samples` to 1."
-                )
-                n_samples = 1
-            kwargs["n_samples"] = n_samples
         if adata is not None and covariate_data is not None:
             if self._dm.control_key not in adata.obs.columns:
                 raise ValueError(
@@ -624,10 +635,11 @@ class CellFlow:
         rep_dict: dict[str, str] | None = None,
         condition_id_key: str | None = None,
         key_added: str | None = _constants.CONDITION_EMBEDDING,
-    ) -> pd.DataFrame:
+    ) -> tuple[pd.DataFrame, pd.DataFrame]:
         """Get the embedding of the conditions.
 
-        Outputs the embeddings generated by the :class:`~cellflow.networks.ConditionEncoder`.
+        Outputs the mean and variance of the learnt embeddings
+        generated by the :class:`~cellflow.networks.ConditionEncoder`.
 
         Parameters
         ----------
@@ -648,7 +660,7 @@ class CellFlow:
 
         Returns
         -------
-        A :class:`~pandas.DataFrame` with the condition embeddings.
+        A :class:`tuple` of :class:`~pandas.DataFrame` with the mean and variance of the condition embeddings.
         """
         if self.solver is None or not self.solver.is_trained:
             raise ValueError("Model not trained. Please call `train` first.")
@@ -667,7 +679,8 @@ class CellFlow:
         else:
             raise ValueError("Covariate data must be a `pandas.DataFrame` or an instance of `BaseData`.")
 
-        condition_embeddings: dict[str, ArrayLike] = {}
+        condition_embeddings_mean: dict[str, ArrayLike] = {}
+        condition_embeddings_var: dict[str, ArrayLike] = {}
         n_conditions = len(next(iter(cond_data.condition_data.values())))
         for i in range(n_conditions):
             condition = {k: v[[i], :] for k, v in cond_data.condition_data.items()}
@@ -676,19 +689,25 @@ class CellFlow:
             else:
                 cov_combination = cond_data.perturbation_idx_to_covariates[i]
                 c_key = tuple(cov_combination[i] for i in range(len(cov_combination)))
-            condition_embeddings[c_key] = self.solver.get_condition_embedding(condition)
+            condition_embeddings_mean[c_key], condition_embeddings_var[c_key] = self.solver.get_condition_embedding(
+                condition
+            )
 
-        df = pd.DataFrame.from_dict({k: v[0] for k, v in condition_embeddings.items()}).T
+        df_mean = pd.DataFrame.from_dict({k: v[0] for k, v in condition_embeddings_mean.items()}).T
+        df_var = pd.DataFrame.from_dict({k: v[0] for k, v in condition_embeddings_var.items()}).T
 
         if condition_id_key:
-            df.index.set_names([condition_id_key], inplace=True)
+            df_mean.index.set_names([condition_id_key], inplace=True)
+            df_var.index.set_names([condition_id_key], inplace=True)
         else:
-            df.index.set_names(list(self._dm.perturb_covar_keys), inplace=True)
+            df_mean.index.set_names(list(self._dm.perturb_covar_keys), inplace=True)
+            df_var.index.set_names(list(self._dm.perturb_covar_keys), inplace=True)
 
         if key_added is not None:
-            _utils.set_plotting_vars(self.adata, key=key_added, value=df)
+            _utils.set_plotting_vars(self.adata, key=key_added, value=df_mean)
+            _utils.set_plotting_vars(self.adata, key=key_added, value=df_var)
 
-        return df
+        return df_mean, df_var
 
     def save(
         self,
@@ -784,7 +803,9 @@ class CellFlow:
         return self._dm
 
     @property
-    def velocity_field(self) -> ConditionalVelocityField | None:
+    def velocity_field(
+        self,
+    ) -> _velocity_field.ConditionalVelocityField | _velocity_field.GENOTConditionalVelocityField | None:
         """The conditional velocity field."""
         return self._vf
 
@@ -801,8 +822,8 @@ class CellFlow:
         self._train_data = data
 
     @velocity_field.setter  # type: ignore[attr-defined,no-redef]
-    def velocity_field(self, vf: ConditionalVelocityField) -> None:
+    def velocity_field(self, vf: _velocity_field.ConditionalVelocityField) -> None:
         """Set the velocity field."""
-        if not isinstance(vf, ConditionalVelocityField):
+        if not isinstance(vf, _velocity_field.ConditionalVelocityField):
             raise ValueError(f"Expected `vf` to be an instance of `ConditionalVelocityField`, found `{type(vf)}`.")
         self._vf = vf

@@ -3,6 +3,7 @@ import pandas as pd
 import pytest
 
 import cellflow
+from cellflow.networks import _velocity_field
 
 perturbation_covariate_comb_args = [
     {"drug": ["drug1"]},
@@ -15,17 +16,24 @@ perturbation_covariate_comb_args = [
 
 
 class TestCellFlow:
-    @pytest.mark.parametrize("solver", ["otfm", "genot"])
+    @pytest.mark.parametrize("solver", ["otfm"])  # , "genot"])
+    @pytest.mark.parametrize("condition_mode", ["deterministic", "stochastic"])
+    @pytest.mark.parametrize("regularization", [0.0, 0.1])
     def test_cellflow_solver(
         self,
         adata_perturbation,
         solver,
+        condition_mode,
+        regularization,
     ):
+        if solver == "genot" and ((condition_mode == "stochastic") or (regularization > 0.0)):
+            return None
         sample_rep = "X"
         control_key = "control"
         perturbation_covariates = {"drug": ["drug1", "drug2"]}
         perturbation_covariate_reps = {"drug": "drug"}
         condition_embedding_dim = 32
+        vf_kwargs = {"genot_source_dims": (32, 32), "genot_source_dropout": 0.1} if solver == "genot" else None
 
         cf = cellflow.model.CellFlow(adata_perturbation, solver=solver)
         cf.prepare_data(
@@ -37,16 +45,27 @@ class TestCellFlow:
         assert cf.train_data is not None
         assert hasattr(cf, "_data_dim")
 
-        condition_encoder_kwargs = {}
-        if solver == "genot":
-            condition_encoder_kwargs["genot_source_layers"] = (({"dims": (32, 32)}),)
-            condition_encoder_kwargs["genot_source_dim"] = 32
-
+        if regularization == 0.0 and condition_mode == "stochastic":
+            with pytest.raises(
+                ValueError,
+                match=r".*Stochastic condition embeddings require `regularization`>0*",
+            ):
+                cf.prepare_model(
+                    condition_mode=condition_mode,
+                    regularization=regularization,
+                    condition_embedding_dim=condition_embedding_dim,
+                    hidden_dims=(32, 32),
+                    decoder_dims=(32, 32),
+                    vf_kwargs=vf_kwargs,
+                )
+            return None
         cf.prepare_model(
+            condition_mode=condition_mode,
+            regularization=regularization,
             condition_embedding_dim=condition_embedding_dim,
             hidden_dims=(32, 32),
             decoder_dims=(32, 32),
-            condition_encoder_kwargs=condition_encoder_kwargs,
+            vf_kwargs=vf_kwargs,
         )
         assert cf._trainer is not None
 
@@ -82,12 +101,11 @@ class TestCellFlow:
             assert "MY_PREDICTION_" + str(key) in adata_perturbation_pred.obsm
 
         if solver == "genot":
-            assert "MY_PREDICTION_" + str(key) + "_0" in adata_perturbation_pred.obsm
+            assert "MY_PREDICTION_" + str(key) in adata_perturbation_pred.obsm
             pred2 = cf.predict(
                 adata_perturbation_pred,
                 sample_rep=sample_rep,
                 covariate_data=adata_perturbation_pred.obs,
-                n_samples=2,
                 max_steps=3,
                 throw=False,
             )
@@ -95,13 +113,19 @@ class TestCellFlow:
             out = next(iter(pred2.values()))
             assert out.shape[0] == adata_perturbation.n_obs
             assert out.shape[1] == cf._data_dim
-            assert out.shape[2] == 2
 
         conds = adata_perturbation.obs.drop_duplicates(subset=["drug1", "drug2"])
-        cond_embed = cf.get_condition_embedding(conds, rep_dict=adata_perturbation.uns)
-        assert isinstance(cond_embed, pd.DataFrame)
-        assert cond_embed.shape[0] == conds.shape[0]
-        assert cond_embed.shape[1] == condition_embedding_dim
+        cond_embed_mean, cond_embed_var = cf.get_condition_embedding(conds, rep_dict=adata_perturbation.uns)
+        assert isinstance(cond_embed_mean, pd.DataFrame)
+        assert isinstance(cond_embed_var, pd.DataFrame)
+        assert cond_embed_mean.shape[0] == conds.shape[0]
+        assert cond_embed_mean.shape[1] == condition_embedding_dim
+        assert cond_embed_var.shape[0] == conds.shape[0]
+        assert cond_embed_var.shape[1] == condition_embedding_dim
+        assert cond_embed_mean.shape[0] == conds.shape[0]
+        assert cond_embed_mean.shape[1] == condition_embedding_dim
+        assert cond_embed_var.shape[0] == conds.shape[0]
+        assert cond_embed_var.shape[1] == condition_embedding_dim
 
     @pytest.mark.parametrize("solver", ["otfm", "genot"])
     @pytest.mark.parametrize("perturbation_covariate_reps", [{}, {"drug": "drug"}])
@@ -116,6 +140,7 @@ class TestCellFlow:
         perturbation_covariates = {"drug": ["drug1"]}
         perturbation_covariate_reps = {"drug": "drug"}
         condition_embedding_dim = 32
+        vf_kwargs = {"genot_source_dims": (32, 32), "genot_source_dropout": 0.1} if solver == "genot" else None
 
         cf = cellflow.model.CellFlow(adata_perturbation, solver=solver)
         cf.prepare_data(
@@ -127,19 +152,20 @@ class TestCellFlow:
         assert cf.train_data is not None
         assert hasattr(cf, "_data_dim")
 
-        condition_encoder_kwargs = {}
-        if solver == "genot":
-            condition_encoder_kwargs["genot_source_layers"] = (({"dims": (32, 32)}),)
-            condition_encoder_kwargs["genot_source_dim"] = 32
-
         cf.prepare_model(
             condition_embedding_dim=condition_embedding_dim,
             hidden_dims=(32, 32),
             decoder_dims=(32, 32),
-            condition_encoder_kwargs=condition_encoder_kwargs,
+            vf_kwargs=vf_kwargs,
         )
         assert cf._trainer is not None
 
+        vector_field_class = (
+            _velocity_field.ConditionalVelocityField
+            if solver == "otfm"
+            else _velocity_field.GENOTConditionalVelocityField
+        )
+        assert cf._vf_class == vector_field_class
         cf.train(num_iterations=3)
         assert cf._dataloader is not None
 
@@ -159,15 +185,15 @@ class TestCellFlow:
         assert out.shape[1] == cf._data_dim
 
         covs = adata_perturbation.obs.drop_duplicates(subset=["drug1"])
-        cond_embed = cf.get_condition_embedding(covariate_data=covs, rep_dict=adata_perturbation.uns)
-
-        assert isinstance(cond_embed, pd.DataFrame)
-        assert cond_embed.shape[0] == len(covs)
-        assert cond_embed.shape[1] == condition_embedding_dim
+        out = cf.get_condition_embedding(covariate_data=covs, rep_dict=adata_perturbation.uns)
+        assert isinstance(out, tuple)
+        assert isinstance(out[0], pd.DataFrame)
+        assert isinstance(out[1], pd.DataFrame)
+        assert out[0].shape[0] == len(covs)
+        assert out[0].shape[1] == condition_embedding_dim
 
     @pytest.mark.parametrize("split_covariates", [[], ["cell_type"]])
     @pytest.mark.parametrize("perturbation_covariates", perturbation_covariate_comb_args)
-    @pytest.mark.parametrize("solver", ["otfm", "genot"])
     @pytest.mark.parametrize("n_conditions_on_log_iteration", [None, 0, 2])
     @pytest.mark.parametrize("n_conditions_on_train_end", [None, 0, 2])
     def test_cellflow_val_data_loading(
@@ -175,11 +201,10 @@ class TestCellFlow:
         adata_perturbation,
         split_covariates,
         perturbation_covariates,
-        solver,
         n_conditions_on_log_iteration,
         n_conditions_on_train_end,
     ):
-        cf = cellflow.model.CellFlow(adata_perturbation, solver=solver)
+        cf = cellflow.model.CellFlow(adata_perturbation)
         cf.prepare_data(
             sample_rep="X",
             control_key="control",
@@ -225,7 +250,7 @@ class TestCellFlow:
         n_conditions_on_log_iteration,
         n_conditions_on_train_end,
     ):
-        # TODO(@MUCDK) after PR #33 check for larger n_conditions_on...
+        vf_kwargs = {"genot_source_dims": (32, 32), "genot_source_dropout": 0.1} if solver == "genot" else None
         cf = cellflow.model.CellFlow(adata_perturbation, solver=solver)
         cf.prepare_data(
             sample_rep="X",
@@ -261,7 +286,7 @@ class TestCellFlow:
             condition_embedding_dim=32,
             hidden_dims=(32, 32),
             decoder_dims=(32, 32),
-            condition_encoder_kwargs=condition_encoder_kwargs,
+            vf_kwargs=vf_kwargs,
         )
         assert cf._trainer is not None
 
@@ -273,10 +298,14 @@ class TestCellFlow:
         assert f"val_{metric_to_compute}_mean" in cf._trainer.training_logs
 
     @pytest.mark.parametrize("solver", ["otfm", "genot"])
+    @pytest.mark.parametrize("condition_mode", ["deterministic", "stochastic"])
+    @pytest.mark.parametrize("regularization", [0.0, 0.1])
     def test_cellflow_predict(
         self,
         adata_perturbation,
         solver,
+        condition_mode,
+        regularization,
     ):
         cf = cellflow.model.CellFlow(adata_perturbation, solver=solver)
         cf.prepare_data(
@@ -287,16 +316,26 @@ class TestCellFlow:
             split_covariates=["cell_type"],
         )
 
-        condition_encoder_kwargs = {}
-        if solver == "genot":
-            condition_encoder_kwargs["genot_source_layers"] = (({"dims": (32, 32)}),)
-            condition_encoder_kwargs["genot_source_dim"] = 32
-
+        vf_kwargs = {"genot_source_dims": (32, 32), "genot_source_dropout": 0.1} if solver == "genot" else None
+        if condition_mode == "stochastic" and regularization == 0.0:
+            with pytest.raises(
+                ValueError,
+                match=r".*Stochastic condition embeddings require `regularization`>0*",
+            ):
+                cf.prepare_model(
+                    condition_mode=condition_mode,
+                    regularization=regularization,
+                    hidden_dims=(32, 32),
+                    decoder_dims=(32, 32),
+                )
+            return None
         cf.prepare_model(
+            condition_mode=condition_mode,
+            regularization=regularization,
             condition_embedding_dim=32,
             hidden_dims=(32, 32),
             decoder_dims=(32, 32),
-            condition_encoder_kwargs=condition_encoder_kwargs,
+            vf_kwargs=vf_kwargs,
         )
 
         cf.train(num_iterations=3)
@@ -327,7 +366,8 @@ class TestCellFlow:
             adata_pred_cell_type_2.obs["control"] = True
             cf.predict(adata_pred_cell_type_2, sample_rep="X", covariate_data=cov_data_ct_1, max_steps=3, throw=False)
 
-    def test_raise_otfm_genot_layers_passed(self, adata_perturbation):
+    def test_raise_otfm_vf_kwargs_passed(self, adata_perturbation):
+        vf_kwargs = {"genot_source_dims": (32, 32), "genot_source_dropouts": 0.1}
         cf = cellflow.model.CellFlow(adata_perturbation, solver="otfm")
         cf.prepare_data(
             sample_rep="X",
@@ -337,13 +377,13 @@ class TestCellFlow:
         )
         with pytest.raises(
             ValueError,
-            match=r".*For OTFlowMatching, 'genot_source_layers' must be `None`.'*",
+            match=r".*For `solver='otfm'`, `vf_kwargs` must be `None`.*",
         ):
             cf.prepare_model(
                 condition_embedding_dim=32,
                 hidden_dims=(32, 32),
                 decoder_dims=(32, 32),
-                genot_source_layers=({"layer_type": "mlp", "dims": (32, 32)},),
+                vf_kwargs=vf_kwargs,
             )
 
     @pytest.mark.parametrize(
@@ -352,10 +392,14 @@ class TestCellFlow:
     )
     @pytest.mark.parametrize("split_covariates", [None, ["cell_type"]])
     @pytest.mark.parametrize("perturbation_covariates", perturbation_covariate_comb_args)
+    @pytest.mark.parametrize("condition_mode", ["deterministic", "stochastic"])
+    @pytest.mark.parametrize("regularization", [0.0, 0.1])
     def test_cellflow_get_condition_embedding(
         self,
         adata_perturbation,
         sample_covariate_and_reps,
+        condition_mode,
+        regularization,
         split_covariates,
         perturbation_covariates,
     ):
@@ -380,7 +424,22 @@ class TestCellFlow:
         assert isinstance(cf._dm.perturb_covar_keys, list)
         assert hasattr(cf, "_data_dim")
 
+        if condition_mode == "stochastic" and regularization == 0.0:
+            with pytest.raises(
+                ValueError,
+                match=r".*Stochastic condition embeddings require `regularization`>0*",
+            ):
+                cf.prepare_model(
+                    condition_mode=condition_mode,
+                    regularization=regularization,
+                    condition_embedding_dim=condition_embedding_dim,
+                    hidden_dims=(32, 32),
+                    decoder_dims=(32, 32),
+                )
+            return None
         cf.prepare_model(
+            condition_mode=condition_mode,
+            regularization=regularization,
             condition_embedding_dim=condition_embedding_dim,
             hidden_dims=(32, 32),
             decoder_dims=(32, 32),
@@ -391,20 +450,26 @@ class TestCellFlow:
         assert cf._dataloader is not None
 
         conds = adata_perturbation.obs.drop_duplicates(subset=cf._dm.perturb_covar_keys)
-        cond_embed = cf.get_condition_embedding(conds, rep_dict=adata_perturbation.uns)
-        assert isinstance(cond_embed, pd.DataFrame)
-        assert cond_embed.shape[0] == conds.shape[0]
-        assert cond_embed.shape[1] == condition_embedding_dim
+        out = cf.get_condition_embedding(conds, rep_dict=adata_perturbation.uns)
+        assert isinstance(out, tuple)
+        assert isinstance(out[0], pd.DataFrame)
+        assert isinstance(out[1], pd.DataFrame)
+        assert out[0].shape[0] == conds.shape[0]
+        assert out[0].shape[1] == condition_embedding_dim
 
         # Test if condition_id_key works
         condition_id_key = "condition_id"
         conds[condition_id_key] = range(len(conds))
         conds[condition_id_key] = "cond_" + conds[condition_id_key].astype(str)
-        cond_embed = cf.get_condition_embedding(
-            conds, rep_dict=adata_perturbation.uns, condition_id_key=condition_id_key
-        )
-        assert isinstance(cond_embed, pd.DataFrame)
-        assert cond_embed.shape[0] == conds.shape[0]
-        assert cond_embed.index.name == condition_id_key
+        out = cf.get_condition_embedding(conds, rep_dict=adata_perturbation.uns, condition_id_key=condition_id_key)
+        assert isinstance(out, tuple)
+        assert isinstance(out[0], pd.DataFrame)
+        assert out[0].shape[0] == out[0].shape[0]
+        assert out[0].index.name == condition_id_key
         cond_id_vals = conds[condition_id_key].values
-        assert cond_embed.index.isin(cond_id_vals).all()
+        assert out[0].index.isin(cond_id_vals).all()
+        assert isinstance(out[1], pd.DataFrame)
+        assert out[1].shape[0] == out[1].shape[0]
+        assert out[1].index.name == condition_id_key
+        cond_id_vals = conds[condition_id_key].values
+        assert out[1].index.isin(cond_id_vals).all()

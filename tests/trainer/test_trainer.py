@@ -1,5 +1,6 @@
 import jax
 import jax.numpy as jnp
+import numpy as np
 import optax
 import pytest
 from ott.neural.methods.flows import dynamics
@@ -43,8 +44,12 @@ class TestTrainer:
         x_pred = model.predict(x_test, cond)
         assert x_pred.shape == x_test.shape
 
-        cond_enc = model.get_condition_embedding(cond)
-        assert cond_enc.shape == (1, 12)
+        out = model.get_condition_embedding(cond)
+        assert isinstance(out, tuple)
+        assert isinstance(out[0], np.ndarray)
+        assert isinstance(out[1], np.ndarray)
+        assert out[0].shape == (1, 12)
+        assert out[1].shape == (1, 12)
 
     @pytest.mark.parametrize("use_validdata", [True, False])
     def test_cellflow_trainer_with_callback(self, dataloader, valid_loader, use_validdata):
@@ -84,5 +89,9 @@ class TestTrainer:
         x_pred = model.predict(x_test, cond)
         assert x_pred.shape == x_test.shape
 
-        cond_enc = model.get_condition_embedding(cond)
-        assert cond_enc.shape == (1, 12)
+        out = model.get_condition_embedding(cond)
+        assert isinstance(out, tuple)
+        assert isinstance(out[0], np.ndarray)
+        assert out[0].shape == (1, 12)
+        assert isinstance(out[1], np.ndarray)
+        assert out[1].shape == (1, 12)

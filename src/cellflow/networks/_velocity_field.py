@@ -9,12 +9,12 @@ from flax import linen as nn
 from flax.training import train_state
 from ott.neural.networks.layers import time_encoder
 
-from cellflow._constants import GENOT_CELL_KEY
 from cellflow._logging import logger
 from cellflow._types import Layers_separate_input_t, Layers_t
-from cellflow.networks._set_encoders import ConditionEncoder, MLPBlock
+from cellflow.networks._set_encoders import ConditionEncoder
+from cellflow.networks._utils import MLPBlock
 
-__all__ = ["ConditionalVelocityField"]
+__all__ = ["ConditionalVelocityField", "GENOTConditionalVelocityField"]
 
 
 class ConditionalVelocityField(nn.Module):
@@ -26,6 +26,14 @@ class ConditionalVelocityField(nn.Module):
             Dimensionality of the output.
         max_combination_length
             Maximum number of covariates in a combination.
+        condition_mode
+            Mode of the encoder, should be one of:
+            - ``'deterministic'``: Learns condition encoding point-wise.
+            - ``'stochastic'``: Learns a Gaussian distribution for representing conditions.
+        regularization
+            Regularization strength in the latent space:
+            - For deterministic mode, it is the strength of the L2 regularization.
+            - For stochastic mode, it is the strength of the KL divergence regularization.
         encode_conditions
                 Processes the embedding of the perturbation conditions if :obj:`True`. If
                 :obj:`False`, directly inputs the embedding of the perturbation conditions to the
@@ -80,6 +88,8 @@ class ConditionalVelocityField(nn.Module):
 
     output_dim: int
     max_combination_length: int
+    condition_mode: Literal["deterministic", "stochastic"] = "deterministic"
+    regularization: float = 1.0
     encode_conditions: bool = True
     condition_embedding_dim: int = 32
     covariates_not_pooled: Sequence[str] = dc_field(default_factory=lambda: [])
@@ -105,17 +115,19 @@ class ConditionalVelocityField(nn.Module):
         """Initialize the network."""
         if self.encode_conditions:
             self.condition_encoder = ConditionEncoder(
+                condition_mode=self.condition_mode,
+                regularization=self.regularization,
                 output_dim=self.condition_embedding_dim,
                 pooling=self.pooling,
                 pooling_kwargs=self.pooling_kwargs,
                 layers_before_pool=self.layers_before_pool,
                 layers_after_pool=self.layers_after_pool,
-                output_dropout=self.cond_output_dropout,
                 covariates_not_pooled=self.covariates_not_pooled,
                 mask_value=self.mask_value,
                 **self.condition_encoder_kwargs,
             )
 
+        self.layer_cond_output_dropout = nn.Dropout(rate=self.cond_output_dropout)
         self.layer_norm_condition = nn.LayerNorm() if self.layer_norm_before_concatenation else lambda x: x
 
         self.time_encoder = MLPBlock(
@@ -146,50 +158,41 @@ class ConditionalVelocityField(nn.Module):
     def __call__(
         self,
         t: jnp.ndarray,
-        x: jnp.ndarray,
+        x_t: jnp.ndarray,
         cond: dict[str, jnp.ndarray],
+        encoder_noise: jnp.ndarray,
         train: bool = True,
-    ) -> jnp.ndarray:
-        """Forward pass through the neural vector field.
-
-        Parameters
-        ----------
-            t
-                Time of shape ``[batch, 1]``.
-            x
-                Data of shape ``[batch, ...]``.
-            condition
-                Condition dictionary, with condition names as keys and condition representations
-                of shape ``[batch, max_combination_length, condition_dim]`` as values.
-            train
-                If :obj:`True`, enables dropout for training.
-
-        Returns
-        -------
-            Output of the neural vector field of shape ``[batch, output_dim]``.
-        """
-        squeeze = x.ndim == 1
-        if self.encode_conditions:
-            cond = self.condition_encoder(cond, training=train)
+    ) -> tuple[jnp.ndarray, jnp.ndarray, jnp.ndarray]:
+        squeeze = x_t.ndim == 1
+        if not self.encode_conditions:
+            cond_embedding = jnp.concatenate(list(cond.values()), axis=-1)
         else:
-            cond = jnp.concatenate(list(cond.values()), axis=-1)
-        t = time_encoder.cyclical_time_encoder(t, n_freqs=self.time_freqs)
-        t = self.time_encoder(t, training=train)
-        x = self.x_encoder(x, training=train)
+            cond_mean, cond_logvar = self.condition_encoder(cond, training=train)
+            if self.condition_mode == "deterministic":
+                cond_embedding = cond_mean
+            else:
+                cond_embedding = cond_mean + encoder_noise * jnp.exp(cond_logvar / 2.0)
+
+        cond_embedding = self.layer_cond_output_dropout(cond_embedding, deterministic=not train)
+
+        t_encoded = time_encoder.cyclical_time_encoder(t, n_freqs=self.time_freqs)
+        t_encoded = self.time_encoder(t_encoded, training=train)
+        x_encoded = self.x_encoder(x_t, training=train)
+
+        t_encoded = self.layer_norm_time(t_encoded)
+        x_encoded = self.layer_norm_x(x_encoded)
+        cond_embedding = self.layer_norm_condition(cond_embedding)
+
         if squeeze:
-            cond = jnp.squeeze(cond)  # , 0)
-        elif cond.shape[0] != x.shape[0]:  # type: ignore[attr-defined]
-            cond = jnp.tile(cond, (x.shape[0], 1))
+            cond_embedding = jnp.squeeze(cond_embedding)  # , 0)
+        elif cond_embedding.shape[0] != x_t.shape[0]:  # type: ignore[attr-defined]
+            cond_embedding = jnp.tile(cond_embedding, (x_t.shape[0], 1))
 
-        t = self.layer_norm_time(t)
-        x = self.layer_norm_x(x)
-        cond = self.layer_norm_condition(cond)
-
-        concatenated = jnp.concatenate((t, x, cond), axis=-1)
+        concatenated = jnp.concatenate((t_encoded, x_encoded, cond_embedding), axis=-1)
         out = self.decoder(concatenated, training=train)
-        return self.output_layer(out)
+        return self.output_layer(out), cond_mean, cond_logvar
 
-    def get_condition_embedding(self, condition: dict[str, jnp.ndarray]) -> jnp.ndarray:
+    def get_condition_embedding(self, condition: dict[str, jnp.ndarray]) -> tuple[jnp.ndarray, jnp.ndarray]:
         """Get the embedding of the condition.
 
         Parameters
@@ -199,14 +202,14 @@ class ConditionalVelocityField(nn.Module):
 
         Returns
         -------
-            Embedding of the condition.
+            Learnt mean and log-variance of the condition embedding.
         """
         if self.encode_conditions:
-            condition = self.condition_encoder(condition, training=False, return_conditions_only=True)
+            condition_mean, condition_logvar = self.condition_encoder(condition, training=False)
         else:
             condition = jnp.concatenate(list(condition.values()), axis=-1)
             logger.warning("Condition encoder is not defined. Returning concatenated input as the embedding.")
-        return condition
+        return condition_mean, condition_logvar
 
     def create_train_state(
         self,
@@ -214,7 +217,6 @@ class ConditionalVelocityField(nn.Module):
         optimizer: optax.OptState,
         input_dim: int,
         conditions: dict[str, jnp.ndarray],
-        additional_cond_dim: int = 0,
     ) -> train_state.TrainState:
         """Create the training state.
 
@@ -231,14 +233,21 @@ class ConditionalVelocityField(nn.Module):
         -------
             The training state.
         """
-        t, x = jnp.ones((1, 1)), jnp.ones((1, input_dim))
+        t, x_t = jnp.ones((1, 1)), jnp.ones((1, input_dim))
+        encoder_noise = jnp.ones((1, self.condition_embedding_dim))
         cond = {
             pert_cov: jnp.ones((1, self.max_combination_length, condition.shape[-1]))
             for pert_cov, condition in conditions.items()
         }
-        if additional_cond_dim:
-            cond[GENOT_CELL_KEY] = jnp.ones((1, additional_cond_dim))
-        params = self.init(rng, t, x, cond, train=False)["params"]
+        params_rng, condition_encoder_rng = jax.random.split(rng, 2)
+        params = self.init(
+            {"params": params_rng, "condition_encoder": condition_encoder_rng},
+            t=t,
+            x_t=x_t,
+            cond=cond,
+            encoder_noise=encoder_noise,
+            train=False,
+        )["params"]
         return train_state.TrainState.create(apply_fn=self.apply, params=params, tx=optimizer)
 
     @property
@@ -275,3 +284,231 @@ class ConditionalVelocityField(nn.Module):
     def decoder(self, decoder):
         """Set the decoder."""
         self._decoder = decoder
+
+
+class GENOTConditionalVelocityField(ConditionalVelocityField):
+    """Parameterized neural vector field with conditions for GENOT.
+
+    Parameters
+    ----------
+        output_dim
+            Dimensionality of the output.
+        max_combination_length
+            Maximum number of covariates in a combination.
+        condition_mode
+            Mode of the encoder, should be one of:
+            - ``'deterministic'``: Learns condition encoding point-wise.
+            - ``'stochastic'``: Learns a Gaussian distribution for representing conditions.
+        regularization
+            Regularization strength in the latent space:
+            - For deterministic mode, it is the strength of the L2 regularization.
+            - For stochastic mode, it is the strength of the KL divergence regularization.
+        encode_conditions
+                Processes the embedding of the perturbation conditions if :obj:`True`. If
+                :obj:`False`, directly inputs the embedding of the perturbation conditions to the
+                generative velocity field. In the latter case, ``'condition_embedding_dim'``,
+                ``'condition_encoder_kwargs'``, ``'pooling'``, ``'pooling_kwargs'``,
+                ``'layers_before_pool'``, ``'layers_after_pool'``, ``'cond_output_dropout'``
+                are ignored.
+        condition_embedding_dim
+            Dimensions of the condition embedding.
+        covariates_not_pooled
+            Covariates that will escape pooling (should be identical across all set elements).
+        pooling
+            Pooling method.
+        pooling_kwargs
+            Keyword arguments for the pooling method.
+        layers_before_pool
+            Layers before pooling. Either a sequence of tuples with layer type and parameters or
+            a dictionary with input-specific layers.
+        layers_after_pool
+            Layers after pooling.
+        cond_output_dropout
+            Dropout rate for the last layer of the condition encoder.
+        condition_encoder_kwargs
+            Keyword arguments for the condition encoder.
+        act_fn
+            Activation function.
+        time_freqs
+            Frequency of the cyclical time encoding.
+        time_encoder_dims
+            Dimensions of the time embedding.
+        time_encoder_dropout
+            Dropout rate for the time embedding.
+        hidden_dims
+            Dimensions of the hidden layers.
+        hidden_dropout
+            Dropout rate for the hidden layers.
+        decoder_dims
+            Dimensions of the output layers.
+        decoder_dropout
+            Dropout rate for the output layers.
+        genot_source_layers
+            TODO
+        layer_norm_before_concatenation
+            If :obj:`True`, applies layer normalization before concatenating
+            the embedded time, embedded data, and condition embeddings.
+        linear_projection_before_concatenation
+            If :obj:`True`, applies a linear projection before concatenating
+            the embedded time, embedded data.
+
+    Returns
+    -------
+        Output of the neural vector field.
+    """
+
+    output_dim: int
+    max_combination_length: int
+    condition_mode: Literal["deterministic", "stochastic"] = "deterministic"
+    regularization: float = 1.0
+    encode_conditions: bool = True
+    condition_embedding_dim: int = 32
+    covariates_not_pooled: Sequence[str] = dc_field(default_factory=lambda: [])
+    pooling: Literal["mean", "attention_token", "attention_seed"] = "attention_token"
+    pooling_kwargs: dict[str, Any] = dc_field(default_factory=lambda: {})
+    layers_before_pool: Layers_separate_input_t | Layers_t = dc_field(default_factory=lambda: [])
+    layers_after_pool: Layers_t = dc_field(default_factory=lambda: [])
+    cond_output_dropout: float = 0.0
+    mask_value: float = 0.0
+    condition_encoder_kwargs: dict[str, Any] = dc_field(default_factory=lambda: {})
+    act_fn: Callable[[jnp.ndarray], jnp.ndarray] = nn.silu
+    time_freqs: int = 1024
+    time_encoder_dims: Sequence[int] = (1024, 1024, 1024)
+    time_encoder_dropout: float = 0.0
+    hidden_dims: Sequence[int] = (1024, 1024, 1024)
+    hidden_dropout: float = 0.0
+    decoder_dims: Sequence[int] = (1024, 1024, 1024)
+    decoder_dropout: float = 0.0
+    genot_source_dims: Sequence[int] = (1024, 1024, 1024)
+    genot_source_dropout: float = 0.0
+    layer_norm_before_concatenation: bool = False
+    linear_projection_before_concatenation: bool = False
+
+    def setup(self):
+        """Initialize the network."""
+        if self.encode_conditions:
+            self.condition_encoder = ConditionEncoder(
+                condition_mode=self.condition_mode,
+                regularization=self.regularization,
+                output_dim=self.condition_embedding_dim,
+                pooling=self.pooling,
+                pooling_kwargs=self.pooling_kwargs,
+                layers_before_pool=self.layers_before_pool,
+                layers_after_pool=self.layers_after_pool,
+                output_dropout=self.cond_output_dropout,
+                covariates_not_pooled=self.covariates_not_pooled,
+                mask_value=self.mask_value,
+                **self.condition_encoder_kwargs,
+            )
+        self.layer_cond_output_dropout = nn.Dropout(rate=self.cond_output_dropout)
+        self.layer_norm_condition = nn.LayerNorm() if self.layer_norm_before_concatenation else lambda x: x
+
+        self.time_encoder = MLPBlock(
+            dims=self.time_encoder_dims,
+            act_fn=self.act_fn,
+            dropout_rate=self.time_encoder_dropout,
+            act_last_layer=False,
+        )
+        self.layer_norm_time = nn.LayerNorm() if self.layer_norm_before_concatenation else lambda x: x
+
+        self.x_encoder = MLPBlock(
+            dims=self.hidden_dims,
+            act_fn=self.act_fn,
+            dropout_rate=self.hidden_dropout,
+            act_last_layer=(False if self.linear_projection_before_concatenation else True),
+        )
+        self.layer_norm_x = nn.LayerNorm() if self.layer_norm_before_concatenation else lambda x: x
+
+        self.x_0_encoder = MLPBlock(
+            dims=self.genot_source_dims,
+            act_fn=self.act_fn,
+            dropout_rate=self.genot_source_dropout,
+        )
+        self.layer_norm_x_0 = nn.LayerNorm() if self.layer_norm_before_concatenation else lambda x: x
+
+        self.decoder = MLPBlock(
+            dims=self.decoder_dims,
+            act_fn=self.act_fn,
+            dropout_rate=self.decoder_dropout,
+            act_last_layer=(False if self.linear_projection_before_concatenation else True),
+        )
+
+        self.output_layer = nn.Dense(self.output_dim)
+
+    def __call__(
+        self,
+        t: jnp.ndarray,
+        x_t: jnp.ndarray,
+        x_0: jnp.ndarray,
+        cond: dict[str, jnp.ndarray],
+        encoder_noise: jnp.ndarray,
+        train: bool = True,
+    ):
+        squeeze = x_t.ndim == 1
+        if not self.encode_conditions:
+            cond_embedding = jnp.concatenate(list(cond.values()), axis=-1)
+        else:
+            cond_mean, cond_logvar = self.condition_encoder(cond, training=train)
+            if self.condition_mode == "deterministic":
+                cond_embedding = cond_mean
+            else:
+                cond_embedding = cond_mean + encoder_noise * jnp.exp(cond_logvar / 2.0)
+        cond_embedding = self.layer_cond_output_dropout(cond_embedding, deterministic=not train)
+        t_encoded = time_encoder.cyclical_time_encoder(t, n_freqs=self.time_freqs)
+        t_encoded = self.time_encoder(t_encoded, training=train)
+        x_encoded = self.x_encoder(x_t, training=train)
+        x_0_encoded = self.x_0_encoder(x_0, training=train)
+
+        t_encoded = self.layer_norm_time(t_encoded)
+        x_encoded = self.layer_norm_x(x_encoded)
+        x_0_encoded = self.layer_norm_x_0(x_0_encoded)
+        cond_embedding = self.layer_norm_condition(cond_embedding)
+
+        if squeeze:
+            cond_embedding = jnp.squeeze(cond_embedding)  # , 0)
+        elif cond_embedding.shape[0] != x_t.shape[0]:  # type: ignore[attr-defined]
+            cond_embedding = jnp.tile(cond_embedding, (x_t.shape[0], 1))
+
+        concatenated = jnp.concatenate((t_encoded, x_encoded, x_0_encoded, cond_embedding), axis=-1)
+        out = self.decoder(concatenated, training=train)
+        return self.output_layer(out), cond_mean, cond_logvar
+
+    def create_train_state(
+        self,
+        rng: jax.Array,
+        optimizer: optax.OptState,
+        input_dim: int,
+        conditions: dict[str, jnp.ndarray],
+    ) -> train_state.TrainState:
+        """Create the training state.
+
+        Parameters
+        ----------
+            rng
+                Random number generator.
+            optimizer
+                Optimizer.
+            input_dim
+                Dimensionality of the velocity field.
+
+        Returns
+        -------
+            The training state.
+        """
+        t, x_t, x_0 = jnp.ones((1, 1)), jnp.ones((1, input_dim)), jnp.ones((1, input_dim))
+        encoder_noise = jnp.ones((1, self.condition_embedding_dim))
+        cond = {
+            pert_cov: jnp.ones((1, self.max_combination_length, condition.shape[-1]))
+            for pert_cov, condition in conditions.items()
+        }
+        params_rng, condition_encoder_rng = jax.random.split(rng, 2)
+        params = self.init(
+            {"params": params_rng, "condition_encoder": condition_encoder_rng},
+            t=t,
+            x_t=x_t,
+            x_0=x_0,
+            cond=cond,
+            encoder_noise=encoder_noise,
+            train=False,
+        )["params"]
+        return train_state.TrainState.create(apply_fn=self.apply, params=params, tx=optimizer)
